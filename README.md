@@ -23,6 +23,7 @@ npm install
 Create a `.env.local` file:
 ```
 OPENAI_API_KEY=your_openai_api_key_here
+USE_MOCK_DATA=false  # Set to 'true' to use mock data instead of scraping
 ```
 
 3. Run the development server:
@@ -31,6 +32,38 @@ npm run dev
 ```
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Testing APIs
+
+### Test the Deals API:
+```bash
+curl http://localhost:3000/api/deals
+```
+
+Or use the test script:
+```bash
+node test-api.js
+```
+
+**Note:** The deals API will automatically fall back to mock data if scraping fails. This ensures the app works even if Hemköp's website structure changes or blocks scraping.
+
+### Test the Generate API:
+```bash
+curl -X POST http://localhost:3000/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"ingredients":[{"name":"Lövbiff","price":89},{"name":"Paprika","price":15}]}'
+```
+
+## API Status
+
+- **Deals API (`/api/deals`)**: 
+  - ✅ Returns mock data if scraping fails (50+ items)
+  - ⚠️ Real scraping may fail due to Hemköp's dynamic content
+  - Check console logs to see which source is used
+  
+- **Generate API (`/api/generate`)**:
+  - ✅ Works with OpenAI API key
+  - Requires valid `OPENAI_API_KEY` in `.env.local`
 
 ## How It Works
 

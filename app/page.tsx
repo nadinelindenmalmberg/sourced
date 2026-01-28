@@ -33,9 +33,20 @@ export default function Home() {
       const data = await response.json();
       if (data.deals) {
         setDeals(data.deals);
+        // Log source for debugging
+        if (data.source) {
+          console.log(`Deals loaded from: ${data.source}`, data);
+        }
+        if (data.warning) {
+          console.warn(data.warning);
+        }
+      } else if (data.error) {
+        console.error('API Error:', data.error);
+        alert(`Kunde inte ladda erbjudanden: ${data.error}`);
       }
     } catch (error) {
       console.error('Error fetching deals:', error);
+      alert('Ett fel uppstod vid hämtning av erbjudanden. Kontrollera konsolen för detaljer.');
     } finally {
       setLoadingDeals(false);
     }
