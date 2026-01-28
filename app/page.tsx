@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Deal } from './api/deals/route';
 import DealsGrid from '../components/DealsGrid';
-import { ChefHat } from 'lucide-react';
+import { ChefHat, Sparkles } from 'lucide-react';
+import { generateRandomSelection, generatePromotionBasedSelection } from './utils/randomSelection';
 
 interface Recipe {
   title: string;
@@ -66,6 +67,41 @@ export default function Home() {
     });
   };
 
+  const handleSurpriseMe = async () => {
+    if (deals.length === 0) {
+      await fetchDeals();
+      // Wait a bit for deals to load
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (deals.length === 0) {
+        alert('Laddar erbjudanden... Försök igen om en sekund.');
+        return;
+      }
+    }
+    
+    setLoading(true);
+    setRecipes([]);
+    
+    // Use promotion-based selection for better recipe suggestions
+    const randomSelection = generatePromotionBasedSelection(deals);
+    
+    if (randomSelection.length === 0) {
+      setLoading(false);
+      alert('Inga ingredienser hittades. Försök igen senare.');
+      return;
+    }
+    
+    console.log('🎲 Selected ingredients:', randomSelection);
+    setSelectedIngredients(randomSelection);
+    
+    // Scroll to show selected items
+    setTimeout(() => {
+      window.scrollTo({ top: 400, behavior: 'smooth' });
+    }, 300);
+    
+    // Automatically generate recipes
+    await generateRecipes();
+  };
+
   const generateRecipes = async () => {
     if (selectedIngredients.length < 2) return;
     
@@ -83,7 +119,7 @@ export default function Home() {
         }),
       });
       
-      const data: RecipeResponse = await response.json();
+      const data: any = await response.json();
       
       if (data.error) {
         console.error('Error generating recipes:', data.error);
@@ -118,6 +154,35 @@ export default function Home() {
             <h1 className="text-4xl md:text-5xl font-bold text-gray-800">
               Hemköp Chef
             </h1>
+          </div>
+          
+          {/* Surprise Me Button */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border-2 border-purple-200">
+            <button
+              onClick={handleSurpriseMe}
+              disabled={loading || loadingDeals}
+              className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg transform hover:scale-105 flex items-center justify-center gap-2 text-lg"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Genererar recept baserat på erbjudanden...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-6 h-6" />
+                  <span>🎲 Chansa! Ge mig ett recept baserat på erbjudanden</span>
+                </>
+              )}
+            </button>
+            <p className="mt-3 text-sm text-gray-700 text-center">
+              Låt oss automatiskt välja ingredienser från kampanjer och skapa 3 kreativa recept åt dig!
+            </p>
+            {deals.length > 0 && (
+              <p className="mt-1 text-xs text-gray-600 text-center">
+                {deals.length} erbjudanden tillgängliga
+              </p>
+            )}
           </div>
           
           {/* Store Selector */}
@@ -159,21 +224,45 @@ export default function Home() {
 
         {/* Selected Ingredients Summary */}
         {selectedIngredients.length > 0 && (
-          <div className="mb-6 p-4 bg-white rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-2">Valda Ingredienser ({selectedIngredients.length}):</h2>
-            <div className="flex flex-wrap gap-2">
-              {selectedIngredients.map((name, idx) => (
-                <span
-                  key={`${name}-${idx}`}
-                  className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
-                >
-                  {name}
+          <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg shadow-md border-2 border-green-200">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xl font-semibold">
+                Valda Ingredienser ({selectedIngredients.length}):
+              </h2>
+              {selectedIngredients.length >= 2 && (
+                <span className="px-3 py-1 bg-green-600 text-white rounded-full text-xs font-bold">
+                  Redo för recept!
                 </span>
-              ))}
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedIngredients.map((name, idx) => {
+                // Check if this ingredient has a promotion
+                const deal = deals.find(d => d.name === name);
+                const hasPromotion = deal && deal.promotion && deal.promotion.length > 0;
+                
+                return (
+                  <span
+                    key={`${name}-${idx}`}
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      hasPromotion 
+                        ? 'bg-red-100 text-red-800 border-2 border-red-300' 
+                        : 'bg-green-100 text-green-800'
+                    }`}
+                  >
+                    {hasPromotion && '🔥 '}
+                    {name}
+                    {hasPromotion && ` (${deal.promotion})`}
+                  </span>
+                );
+              })}
             </div>
             <button
-              onClick={() => setSelectedIngredients([])}
-              className="mt-3 text-sm text-red-600 hover:text-red-800"
+              onClick={() => {
+                setSelectedIngredients([]);
+                setRecipes([]);
+              }}
+              className="mt-3 text-sm text-red-600 hover:text-red-800 font-medium"
             >
               Rensa val
             </button>
@@ -183,11 +272,23 @@ export default function Home() {
         {/* Recipes Display */}
         {recipes.length > 0 && (
           <div id="recipes" className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Genererade Recept</h2>
+            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">
+                ✨ Genererade Recept baserat på erbjudanden
+              </h2>
+              <p className="text-gray-600">
+                Här är {recipes.length} kreativa recept som använder ingredienser från kampanjer!
+              </p>
+            </div>
             <div className="space-y-6">
               {recipes.map((recipe, idx) => (
-                <div key={idx} className="p-6 bg-white rounded-lg shadow-lg">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-4">{recipe.title}</h3>
+                <div key={idx} className="p-6 bg-white rounded-lg shadow-lg border-2 border-blue-100">
+                  <div className="flex items-start justify-between mb-4">
+                    <h3 className="text-2xl font-bold text-gray-800">{recipe.title}</h3>
+                    <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+                      Recept {idx + 1}
+                    </span>
+                  </div>
                   
                   <div className="mb-4">
                     <h4 className="text-lg font-semibold mb-2">Ingredienser:</h4>
@@ -207,14 +308,32 @@ export default function Home() {
                     </ol>
                   </div>
 
-                  <a
-                    href={`https://www.google.com/search?q=${encodeURIComponent(recipe.search_query)}+site:ica.se+OR+site:arla.se+OR+site:koket.se`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    🔍 Hitta liknande recept på nätet
-                  </a>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={`https://www.google.com/search?q=${encodeURIComponent(recipe.search_query)}+site:ica.se+OR+site:arla.se+OR+site:koket.se+OR+site:hemkop.se`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      🔍 Hitta liknande recept på nätet
+                    </a>
+                    <a
+                      href={`https://www.ica.se/recept/sok/?q=${encodeURIComponent(recipe.search_query)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      📖 Sök på ICA.se
+                    </a>
+                    <a
+                      href={`https://www.koket.se/recept?q=${encodeURIComponent(recipe.search_query)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                    >
+                      🍳 Sök på Koket.se
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>

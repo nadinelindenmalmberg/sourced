@@ -97,18 +97,23 @@ export default function DealsGrid({ deals, selectedIngredients, onToggleIngredie
                 <div>
                   {deal.promotion ? (
                     <div>
-                      <span className="text-lg font-bold text-red-600">
-                        {deal.promotion}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded">
+                          KAMPANJ
+                        </span>
+                        <span className="text-lg font-bold text-red-600">
+                          {deal.promotion}
+                        </span>
+                      </div>
                       {deal.price > 0 && (
-                        <span className="text-sm text-gray-500 ml-2">
-                          ({deal.price} kr/{deal.unit})
+                        <span className="text-sm text-gray-500 mt-1 block">
+                          Vanligt pris: {deal.price} kr/{deal.unit}
                         </span>
                       )}
                     </div>
                   ) : (
                     deal.price > 0 && (
-                      <span className="text-lg font-bold text-red-600">
+                      <span className="text-lg font-bold text-gray-700">
                         {deal.price} kr/{deal.unit}
                       </span>
                     )

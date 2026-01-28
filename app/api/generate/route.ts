@@ -65,10 +65,18 @@ Task: Create 3 distinct, budget-friendly recipes using these ingredients.
 
 The search_query should be a specific, descriptive query in Swedish that would help find similar recipes on Swedish recipe sites.`;
 
-    const userPrompt = `Create 3 distinct recipes using these ingredients:
-${ingredients.map((ing, i) => `${i + 1}. ${ing}`).join('\n')}
+    const userPrompt = `Create 3 distinct, creative recipes using these ingredients that are CURRENTLY ON SALE at Hemköp:
 
-Make sure each recipe is unique and uses different cooking techniques or styles.`;
+${ingredients.map((ing, i) => `${i + 1}. ${ing} (ON SALE - use this prominently!)`).join('\n')}
+
+Requirements:
+- These ingredients are discounted/on sale - make recipes that highlight their value
+- Each recipe should be unique (different meal types: breakfast, lunch, dinner, or different cuisines)
+- Make them practical, budget-friendly, and delicious
+- Use the sale ingredients as the main stars of each dish
+- Be creative but realistic for Swedish home cooking
+
+Make sure each recipe is distinct and uses different cooking techniques or styles.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',

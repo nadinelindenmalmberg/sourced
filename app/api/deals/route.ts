@@ -82,14 +82,12 @@ export async function GET(request: NextRequest) {
           continue;
         }
         
-        const rawData = await response.json();
+        const rawData: any = await response.json();
         console.log(`Page ${page} raw response keys:`, Object.keys(rawData));
         console.log(`Page ${page} raw response sample:`, JSON.stringify(rawData).substring(0, 500));
         
-        const data: HemkopApiResponse = rawData;
-        
         // Handle different response structures
-        const results = data.results || data.items || data.data || (Array.isArray(rawData) ? rawData : []);
+        const results = rawData.results || rawData.items || rawData.data || (Array.isArray(rawData) ? rawData : []);
         
         if (!results || results.length === 0) {
           console.log(`No more results at page ${page}, stopping pagination`);
