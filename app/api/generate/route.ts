@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
 Input: A list of discounted ingredients from Hemköp (often a mix of great cooking items and some fika/snacks).
 
-Task: Create 3 distinct, budget-friendly recipe recommendations that feel like genuinely good ideas.
+Task: Create 3 distinct, recipe recommendations that feel like genuinely very good ideas, could be very simple aswell.
 
 **Crucial:** 
 - You may assume the user has basic pantry staples (salt, pepper, oil, flour, butter, sugar, vinegar).

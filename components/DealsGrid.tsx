@@ -46,7 +46,7 @@ export default function DealsGrid({ deals, selectedIngredients, onToggleIngredie
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
       {foodDeals.map((deal) => {
         const isSelected = selectedIngredients.includes(deal.name);
         
@@ -55,19 +55,20 @@ export default function DealsGrid({ deals, selectedIngredients, onToggleIngredie
             key={deal.id}
             onClick={() => onToggleIngredient(deal.name)}
             className={`
-              bg-white rounded-lg shadow-md cursor-pointer transition-all transform hover:scale-105
-              ${isSelected ? 'ring-2 ring-green-500' : ''}
+              bg-white rounded-xl shadow-md cursor-pointer transition-all active:scale-95 touch-manipulation
+              ${isSelected ? 'ring-2 ring-green-500 ring-offset-2' : ''}
             `}
           >
             {/* Product Image */}
             {deal.image ? (
-              <div className="relative w-full h-48 bg-gray-100 rounded-t-lg overflow-hidden">
+              <div className="relative w-full h-40 sm:h-48 bg-gray-100 rounded-t-xl overflow-hidden">
                 <Image
                   src={deal.image}
                   alt={deal.name}
                   fill
                   className="object-contain"
                   unoptimized
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                   onError={(e) => {
                     // Hide image on error
                     const target = e.currentTarget as HTMLImageElement;
@@ -78,51 +79,49 @@ export default function DealsGrid({ deals, selectedIngredients, onToggleIngredie
                 />
               </div>
             ) : (
-              <div className="w-full h-48 bg-gray-100 rounded-t-lg flex items-center justify-center">
-                <span className="text-gray-400 text-sm">Ingen bild</span>
+              <div className="w-full h-40 sm:h-48 bg-gray-100 rounded-t-xl flex items-center justify-center">
+                <span className="text-gray-400 text-xs sm:text-sm">Ingen bild</span>
               </div>
             )}
             
             {/* Product Info */}
-            <div className="p-4">
+            <div className="p-2 sm:p-4">
               {deal.brand && (
-                <p className="text-xs text-gray-500 mb-1">{deal.brand}</p>
+                <p className="text-xs text-gray-500 mb-1 line-clamp-1">{deal.brand}</p>
               )}
-              <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2">
+              <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2 text-sm sm:text-base leading-tight">
                 {deal.name}
               </h3>
               
               {/* Price and Promotion */}
-              <div className="flex items-center justify-between">
-                <div>
-                  {deal.promotion ? (
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs font-bold rounded">
-                          KAMPANJ
-                        </span>
-                        <span className="text-lg font-bold text-red-600">
-                          {deal.promotion}
-                        </span>
-                      </div>
-                      {deal.price > 0 && (
-                        <span className="text-sm text-gray-500 mt-1 block">
-                          Vanligt pris: {deal.price} kr/{deal.unit}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    deal.price > 0 && (
-                      <span className="text-lg font-bold text-gray-700">
-                        {deal.price} kr/{deal.unit}
+              <div className="flex flex-col gap-1">
+                {deal.promotion ? (
+                  <div>
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span className="px-1.5 py-0.5 bg-red-100 text-red-800 text-xs font-bold rounded">
+                        KAMPANJ
                       </span>
-                    )
-                  )}
-                </div>
+                      <span className="text-base sm:text-lg font-bold text-red-600">
+                        {deal.promotion}
+                      </span>
+                    </div>
+                    {deal.price > 0 && (
+                      <span className="text-xs text-gray-500">
+                        Vanligt: {deal.price} kr/{deal.unit}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  deal.price > 0 && (
+                    <span className="text-base sm:text-lg font-bold text-gray-700">
+                      {deal.price} kr/{deal.unit}
+                    </span>
+                  )
+                )}
               </div>
               
               {isSelected && (
-                <div className="mt-2 text-sm text-green-600 font-medium">
+                <div className="mt-2 text-xs sm:text-sm text-green-600 font-medium">
                   ✓ Vald
                 </div>
               )}
