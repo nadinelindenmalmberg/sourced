@@ -8,6 +8,16 @@ export interface Deal {
   discount?: number;
 }
 
+// Try to use Puppeteer if available, otherwise fall back to fetch
+// Load dynamically to avoid build-time issues
+async function getPuppeteer() {
+  try {
+    return await import('puppeteer');
+  } catch (e) {
+    return null;
+  }
+}
+
 // Mock data for testing when scraping fails
 const MOCK_DEALS: Deal[] = [
   { name: 'Lövbiff', price: 89, category: 'Kött', originalPrice: 120, discount: 26 },
@@ -72,11 +82,7 @@ export async function GET() {
 
   try {
     const deals: Deal[] = [];
-    const baseUrl = 'https://www.hemkop.se';
-    let page = 1;
-    let hasMorePages = true;
-    let pagesFetched = 0;
-
+    
     // Non-food keywords to filter out
     const nonFoodKeywords = [
       'tvätt', 'disk', 'blöjor', 'tandkräm', 'shampoo', 'balsam',
@@ -84,115 +90,357 @@ export async function GET() {
       'påsar', 'rengöring', 'städning', 'tvättmedel', 'mjukgörare'
     ];
 
-    while (hasMorePages && page <= 5) { // Reduced to 5 pages for faster testing
+    // Try Puppeteer first if available
+    const puppeteerModule = await getPuppeteer();
+    if (puppeteerModule) {
+      console.log('Using Puppeteer to scrape Hemköp...');
+      const browser = await puppeteerModule.default.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+      
       try {
-        const url = `${baseUrl}/kampanjer?page=${page}`;
-        console.log(`Fetching page ${page}: ${url}`);
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'sv-SE,sv;q=0.9,en;q=0.8',
-          },
-          // Add timeout
-          signal: AbortSignal.timeout(10000), // 10 second timeout
-        });
-
-        if (!response.ok) {
-          console.log(`Page ${page} returned status ${response.status}`);
-          hasMorePages = false;
-          break;
-        }
-
-        const html = await response.text();
-        console.log(`Page ${page} fetched, HTML length: ${html.length}`);
+        // Try different URL patterns
+        const urlsToTry = [
+          'https://www.hemkop.se/erbjudanden',
+          'https://www.hemkop.se/artikel/alltid-bra-pris',
+          'https://www.hemkop.se/handla',
+        ];
         
-        // Try multiple extraction patterns
-        let matches: string[] = [];
-        
-        // Pattern 1: Look for product containers
-        const productPattern = /<div[^>]*class="[^"]*product[^"]*"[^>]*>[\s\S]*?<\/div>/gi;
-        matches = html.match(productPattern) || [];
-        
-        // Pattern 2: If no matches, try looking for data attributes
-        if (matches.length === 0) {
-          const dataPattern = /<[^>]*data-[^>]*product[^>]*>[\s\S]*?<\/[^>]*>/gi;
-          matches = html.match(dataPattern) || [];
-        }
-        
-        // Pattern 3: Look for any div with price information
-        if (matches.length === 0) {
-          const pricePattern = /<div[^>]*>[\s\S]{0,500}?\d+\s*kr[\s\S]{0,500}?<\/div>/gi;
-          matches = html.match(pricePattern) || [];
-        }
-
-        console.log(`Found ${matches.length} potential product matches on page ${page}`);
-
-        for (const match of matches) {
-          // Extract name - try multiple patterns
-          const nameMatch = match.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i) || 
-                           match.match(/data-product-name="([^"]+)"/i) ||
-                           match.match(/data-name="([^"]+)"/i) ||
-                           match.match(/title="([^"]+)"/i) ||
-                           match.match(/<a[^>]*>([^<]+)<\/a>/i);
-          
-          // Extract price - try multiple patterns
-          const priceMatch = match.match(/(\d+)[,\s]*(\d+)?\s*kr/i) || 
-                            match.match(/data-price="([^"]+)"/i) ||
-                            match.match(/price[^>]*>([^<]+)</i) ||
-                            match.match(/(\d+)[,\s]*(\d+)?\s*:-/i);
-          
-          // Extract category if available
-          const categoryMatch = match.match(/data-category="([^"]+)"/i) ||
-                               match.match(/category[^>]*>([^<]+)</i);
-
-          if (nameMatch && priceMatch) {
-            const name = nameMatch[1].trim();
-            const priceStr = priceMatch[1] || priceMatch[2];
-            const price = parseFloat(priceStr?.replace(/\s/g, '') || '0');
+        for (const url of urlsToTry) {
+          try {
+            console.log(`Trying URL: ${url}`);
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
             
-            // Skip if it's a non-food item
-            const isNonFood = nonFoodKeywords.some(keyword => 
-              name.toLowerCase().includes(keyword.toLowerCase())
-            );
+            // Wait for content to load
+            await page.waitForTimeout(3000);
             
-            if (isNonFood || price === 0 || price > 1000) continue; // Skip unrealistic prices
-
-            const category = categoryMatch ? categoryMatch[1].trim() : undefined;
-            
-            // Try to extract original price for discount calculation
-            const originalPriceMatch = match.match(/was[^>]*>(\d+)[,\s]*(\d+)?\s*kr/i) ||
-                                       match.match(/tidigare[^>]*>(\d+)[,\s]*(\d+)?\s*kr/i) ||
-                                       match.match(/före[^>]*>(\d+)[,\s]*(\d+)?\s*kr/i);
-            let originalPrice: number | undefined;
-            if (originalPriceMatch) {
-              originalPrice = parseFloat((originalPriceMatch[1] || originalPriceMatch[2] || '0').replace(/\s/g, ''));
-            }
-
-            deals.push({
-              name,
-              price,
-              category,
-              originalPrice,
-              discount: originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : undefined,
+            // Try to intercept network requests to find API calls
+            const apiCalls: string[] = [];
+            page.on('response', (response: any) => {
+              const url = response.url();
+              if (url.includes('api') || url.includes('product') || url.includes('offer') || url.includes('erbjudande')) {
+                apiCalls.push(url);
+              }
             });
+            
+            // Wait a bit for API calls to happen
+            await page.waitForTimeout(2000);
+            
+            // Try to extract product data from the page
+            const pageDeals = await page.evaluate((nonFoodKeywords: string[]) => {
+              const deals: any[] = [];
+              
+              // Strategy 1: Look for product cards/containers
+              const productSelectors = [
+                '[data-testid*="product"]',
+                '[class*="product-card"]',
+                '[class*="ProductCard"]',
+                '[class*="product-item"]',
+                '[class*="ProductItem"]',
+                'article[class*="product"]',
+                '[class*="offer"]',
+                '[class*="deal"]',
+              ];
+              
+              let productElements: Element[] = [];
+              for (const selector of productSelectors) {
+                try {
+                  const found = Array.from(document.querySelectorAll(selector));
+                  if (found.length > 2) { // Need at least a few to be confident
+                    productElements = found;
+                    console.log(`Found ${found.length} elements with selector: ${selector}`);
+                    break;
+                  }
+                } catch (e) {
+                  // Selector might be invalid, continue
+                }
+              }
+              
+              // Strategy 2: Look for elements containing both name and price
+              if (productElements.length === 0) {
+                const allDivs = Array.from(document.querySelectorAll('div, article, section'));
+                productElements = allDivs.filter(el => {
+                  const text = el.textContent || '';
+                  const hasPrice = /\d+[,\s]*\d*\s*kr/i.test(text);
+                  const hasName = text.length > 10 && text.length < 300;
+                  const childCount = el.children.length;
+                  // Likely a product card if it has price, reasonable text length, and some structure
+                  return hasPrice && hasName && (childCount > 0 || el.querySelector('img'));
+                });
+              }
+              
+              console.log(`Found ${productElements.length} potential product elements`);
+              
+              for (const element of productElements.slice(0, 150)) {
+                try {
+                  const text = element.textContent || '';
+                  const innerHTML = element.innerHTML || '';
+                  
+                  // Extract name - try multiple strategies
+                  let name = '';
+                  const nameSelectors = [
+                    'h1', 'h2', 'h3', 'h4',
+                    '[class*="name"]', '[class*="title"]', '[class*="Name"]', '[class*="Title"]',
+                    '[class*="product-name"]', '[class*="product-title"]',
+                    'a[href*="product"]', 'a[href*="artikel"]',
+                  ];
+                  
+                  for (const selector of nameSelectors) {
+                    const nameEl = element.querySelector(selector);
+                    if (nameEl) {
+                      const candidateName = (nameEl.textContent || '').trim();
+                      if (candidateName.length > 3 && candidateName.length < 80) {
+                        name = candidateName.split('\n')[0].split('|')[0].trim();
+                        break;
+                      }
+                    }
+                  }
+                  
+                  // Fallback: use first substantial text line
+                  if (!name || name.length < 3) {
+                    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80);
+                    if (lines.length > 0) {
+                      name = lines[0];
+                    }
+                  }
+                  
+                  // Extract price - look for "XX kr" or "XX:-" patterns
+                  const pricePatterns = [
+                    /(\d+)[,\s]*(\d+)?\s*kr/i,
+                    /(\d+)[,\s]*(\d+)?\s*:-/i,
+                    /(\d+)[,\s]*(\d+)?\s*SEK/i,
+                  ];
+                  
+                  let priceMatch = null;
+                  for (const pattern of pricePatterns) {
+                    priceMatch = text.match(pattern);
+                    if (priceMatch) break;
+                  }
+                  
+                  if (name && name.length > 2 && priceMatch) {
+                    const priceStr = priceMatch[1] || priceMatch[2];
+                    const price = parseFloat(priceStr?.replace(/\s/g, '') || '0');
+                    
+                    // Skip if it's a non-food item
+                    const isNonFood = nonFoodKeywords.some((keyword: string) => 
+                      name.toLowerCase().includes(keyword.toLowerCase())
+                    );
+                    
+                    // Validate price is reasonable
+                    if (!isNonFood && price > 0 && price < 1000 && name.length > 2) {
+                      // Extract category from parent containers or data attributes
+                      let category: string | undefined;
+                      const categoryEl = element.closest('[class*="category"], [class*="Category"], [data-category]');
+                      if (categoryEl) {
+                        category = (categoryEl.getAttribute('data-category') || categoryEl.textContent || '').trim().substring(0, 50);
+                      }
+                      
+                      // Extract original price for discount calculation
+                      const originalPricePatterns = [
+                        /(?:tidigare|före|was|förut|ursprungligt)\s*:?\s*(\d+)[,\s]*(\d+)?\s*kr/i,
+                        /(\d+)[,\s]*(\d+)?\s*kr\s*→\s*(\d+)[,\s]*(\d+)?\s*kr/i, // "120 kr → 89 kr"
+                      ];
+                      
+                      let originalPrice: number | undefined;
+                      for (const pattern of originalPricePatterns) {
+                        const match = text.match(pattern);
+                        if (match) {
+                          originalPrice = parseFloat((match[1] || match[2] || match[3] || match[4] || '0').replace(/\s/g, ''));
+                          if (originalPrice > price) break;
+                        }
+                      }
+                      
+                      // Avoid duplicates
+                      const isDuplicate = deals.some(d => d.name === name && d.price === price);
+                      if (!isDuplicate) {
+                        deals.push({
+                          name: name.substring(0, 100),
+                          price,
+                          category,
+                          originalPrice,
+                          discount: originalPrice && originalPrice > price ? 
+                            Math.round(((originalPrice - price) / originalPrice) * 100) : undefined,
+                        });
+                      }
+                    }
+                  }
+                } catch (e) {
+                  // Skip this element if there's an error
+                  continue;
+                }
+              }
+              
+              console.log(`Extracted ${deals.length} deals from page`);
+              return deals;
+            }, nonFoodKeywords);
+            
+            // If we found API calls, try to fetch from them
+            if (apiCalls.length > 0 && pageDeals.length === 0) {
+              console.log(`Found ${apiCalls.length} potential API endpoints:`, apiCalls.slice(0, 5));
+              // Could try to fetch from these endpoints, but they might require auth
+            }
+            
+            if (pageDeals.length > 0) {
+              console.log(`Found ${pageDeals.length} deals from ${url}`);
+              deals.push(...pageDeals);
+              break; // Success, stop trying other URLs
+            }
+          } catch (error) {
+            console.error(`Error scraping ${url}:`, error);
+            continue;
           }
         }
-
-        pagesFetched++;
         
-        // Check if there are more pages
-        const nextPagePattern = /<a[^>]*class="[^"]*next[^"]*"[^>]*>/i;
-        hasMorePages = nextPagePattern.test(html) && pagesFetched < 5;
-        
-        page++;
-        
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await browser.close();
       } catch (error) {
-        console.error(`Error fetching page ${page}:`, error);
-        hasMorePages = false;
+        console.error('Puppeteer error:', error);
+        await browser.close();
+      }
+    }
+    
+    // Try to find API endpoints
+    if (deals.length === 0) {
+      console.log('Trying to find API endpoints...');
+      const apiEndpoints = [
+        'https://www.hemkop.se/api/products',
+        'https://www.hemkop.se/api/offers',
+        'https://www.hemkop.se/api/erbjudanden',
+        'https://www.hemkop.se/api/kampanjer',
+        'https://api.hemkop.se/products',
+        'https://api.hemkop.se/offers',
+      ];
+      
+      for (const apiUrl of apiEndpoints) {
+        try {
+          const response = await fetch(apiUrl, {
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            signal: AbortSignal.timeout(5000),
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`Found API endpoint: ${apiUrl}`);
+            // Process API response (structure may vary)
+            if (Array.isArray(data)) {
+              deals.push(...data.map((item: any) => ({
+                name: item.name || item.title || item.productName,
+                price: item.price || item.currentPrice,
+                category: item.category,
+                originalPrice: item.originalPrice || item.oldPrice,
+              })).filter((d: any) => d.name && d.price));
+            } else if (data.products || data.items || data.deals) {
+              const items = data.products || data.items || data.deals;
+              deals.push(...items.map((item: any) => ({
+                name: item.name || item.title || item.productName,
+                price: item.price || item.currentPrice,
+                category: item.category,
+                originalPrice: item.originalPrice || item.oldPrice,
+              })).filter((d: any) => d.name && d.price));
+            }
+            if (deals.length > 0) break;
+          }
+        } catch (error) {
+          // API endpoint doesn't exist or requires auth, continue
+        }
+      }
+    }
+    
+    // Fallback: Try fetch with different URL patterns and extract structured data
+    if (deals.length === 0) {
+      console.log('Trying fetch method with structured data extraction...');
+      const baseUrl = 'https://www.hemkop.se';
+      const urlsToTry = [
+        `${baseUrl}/erbjudanden`,
+        `${baseUrl}/artikel/alltid-bra-pris`,
+      ];
+      
+      for (const url of urlsToTry) {
+        try {
+          console.log(`Trying fetch: ${url}`);
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              'Accept-Language': 'sv-SE,sv;q=0.9,en;q=0.8',
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (response.ok) {
+            const html = await response.text();
+            console.log(`Fetched ${url}, HTML length: ${html.length}`);
+            
+            // Try to find JSON-LD structured data
+            const jsonLdMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+            for (const jsonLd of jsonLdMatches) {
+              try {
+                const jsonContent = jsonLd.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1];
+                if (jsonContent) {
+                  const data = JSON.parse(jsonContent);
+                  if (data['@type'] === 'Product' || Array.isArray(data)) {
+                    console.log('Found JSON-LD structured data');
+                    // Extract products from JSON-LD
+                  }
+                }
+              } catch (e) {
+                // Not valid JSON, continue
+              }
+            }
+            
+            // Try to find embedded JSON data in script tags
+            const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+            for (const script of scriptMatches) {
+              // Look for window.__INITIAL_STATE__ or similar
+              const stateMatch = script.match(/window\.__[A-Z_]+__\s*=\s*(\{[\s\S]{100,10000}\});/);
+              if (stateMatch) {
+                try {
+                  const state = JSON.parse(stateMatch[1]);
+                  console.log('Found initial state data');
+                  // Try to extract products from state
+                  const extractProducts = (obj: any, path: string[] = []): any[] => {
+                    if (Array.isArray(obj)) {
+                      return obj.filter(item => item && typeof item === 'object' && (item.name || item.price));
+                    }
+                    if (obj && typeof obj === 'object') {
+                      for (const [key, value] of Object.entries(obj)) {
+                        if (key.toLowerCase().includes('product') || key.toLowerCase().includes('offer')) {
+                          if (Array.isArray(value)) {
+                            return value;
+                          }
+                        }
+                        const found = extractProducts(value, [...path, key]);
+                        if (found.length > 0) return found;
+                      }
+                    }
+                    return [];
+                  };
+                  const foundProducts = extractProducts(state);
+                  if (foundProducts.length > 0) {
+                    deals.push(...foundProducts.map((item: any) => ({
+                      name: item.name || item.title || item.productName || item.label,
+                      price: item.price || item.currentPrice || item.salePrice,
+                      category: item.category || item.categoryName,
+                      originalPrice: item.originalPrice || item.oldPrice || item.regularPrice,
+                    })).filter((d: any) => d.name && d.price && d.price > 0 && d.price < 1000));
+                  }
+                } catch (e) {
+                  // Not valid JSON, continue
+                }
+              }
+            }
+            
+            if (deals.length > 0) break;
+          }
+        } catch (error) {
+          console.error(`Error fetching ${url}:`, error);
+        }
       }
     }
 
@@ -201,7 +449,7 @@ export async function GET() {
       index === self.findIndex((d) => d.name === deal.name && d.price === deal.price)
     );
 
-    console.log(`Scraping completed: ${uniqueDeals.length} unique deals found from ${pagesFetched} pages`);
+    console.log(`Scraping completed: ${uniqueDeals.length} unique deals found`);
 
     // If we got no deals, fall back to mock data
     if (uniqueDeals.length === 0) {
@@ -217,8 +465,7 @@ export async function GET() {
     return NextResponse.json({ 
       deals: uniqueDeals, 
       count: uniqueDeals.length,
-      source: 'scraped',
-      pagesFetched
+      source: 'scraped'
     });
   } catch (error) {
     console.error('Error fetching deals:', error);
