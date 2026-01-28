@@ -6,18 +6,18 @@ const openai = new OpenAI({
 });
 
 export interface RecipeRequest {
-  ingredients: Array<{
-    name: string;
-    price: number;
-  }>;
+  ingredients: string[]; // Array of ingredient names
+}
+
+export interface Recipe {
+  title: string;
+  ingredients: string[];
+  instructions: string[];
+  search_query: string;
 }
 
 export interface RecipeResponse {
-  recipe_title: string;
-  ingredients_used: string[];
-  omitted_ingredients: string[];
-  instructions: string[];
-  search_query: string;
+  recipes: Recipe[];
 }
 
 export async function POST(request: NextRequest) {
@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
     const body: RecipeRequest = await request.json();
     const { ingredients } = body;
 
-    if (!ingredients || ingredients.length === 0) {
+    if (!ingredients || ingredients.length < 2) {
       return NextResponse.json(
-        { error: 'No ingredients provided' },
+        { error: 'At least 2 ingredients required' },
         { status: 400 }
       );
     }
@@ -39,35 +39,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Identify the main ingredient (usually the most expensive one)
-    const sortedIngredients = [...ingredients].sort((a, b) => b.price - a.price);
-    const mainIngredient = sortedIngredients[0];
-    const otherIngredients = sortedIngredients.slice(1);
+    const systemPrompt = `You are a professional Swedish chef using local ingredients.
 
-    const systemPrompt = `You are a creative Swedish chef.
+Input: A list of discounted ingredients from Hemköp.
 
-Input: A list of random discounted ingredients from Hemköp.
+Task: Create 3 distinct, budget-friendly recipes using these ingredients.
 
-Task: Create 1 creative recipe that uses the **Main Ingredient** (usually the most expensive one: ${mainIngredient.name}) and incorporates the others if possible.
+**Crucial:** 
+- You may assume the user has basic pantry staples (salt, pepper, oil, flour, butter, sugar, vinegar).
+- Each recipe should be practical and use Swedish cooking methods.
+- Recipes should be distinct from each other (different cooking styles, cuisines, or meal types).
+- Make the recipes budget-friendly and suitable for everyday cooking.
 
-**Constraint:** If a randomly selected ingredient truly does not fit (e.g., 'Vanilla Sauce' with 'Salmon'), you are allowed to **omit it** and mention in the notes: 'Skipped [Item] as it didn't fit the flavor profile.'
-
-**Pantry:** Assume standard pantry staples (Oil, Butter, Soy Sauce, Spices, Flour, Rice/Pasta, Salt, Pepper, Garlic, Onion).
-
-**Output Format:** Return a valid JSON object with the following structure:
+**Output:** Return ONLY valid JSON matching this exact schema:
 {
-  "recipe_title": "Creative recipe name in Swedish",
-  "ingredients_used": ["list", "of", "ingredients", "actually", "used"],
-  "omitted_ingredients": ["list", "of", "ingredients", "omitted", "if", "any"],
-  "instructions": ["Step 1", "Step 2", "Step 3", ...],
-  "search_query": "Google search query for similar recipes"
+  "recipes": [
+    {
+      "title": "Recipe Name in Swedish",
+      "ingredients": ["Ingredient 1 with quantity", "Ingredient 2 with quantity", ...],
+      "instructions": ["Step 1", "Step 2", "Step 3", ...],
+      "search_query": "Specific search query in Swedish to find similar recipes"
+    }
+  ]
 }
 
-Make the recipe practical, delicious, and suitable for Swedish home cooking.`;
+The search_query should be a specific, descriptive query in Swedish that would help find similar recipes on Swedish recipe sites.`;
 
-    const userPrompt = `Create a recipe using these ingredients:
-Main: ${mainIngredient.name} (${mainIngredient.price} SEK)
-Others: ${otherIngredients.map(i => `${i.name} (${i.price} SEK)`).join(', ')}`;
+    const userPrompt = `Create 3 distinct recipes using these ingredients:
+${ingredients.map((ing, i) => `${i + 1}. ${ing}`).join('\n')}
+
+Make sure each recipe is unique and uses different cooking techniques or styles.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -88,31 +89,52 @@ Others: ${otherIngredients.map(i => `${i.name} (${i.price} SEK)`).join(', ')}`;
     }
 
     try {
-      const recipe: RecipeResponse = JSON.parse(content);
+      const parsed = JSON.parse(content);
       
-      // Validate and ensure arrays are arrays
-      if (!Array.isArray(recipe.ingredients_used)) {
-        recipe.ingredients_used = [];
-      }
-      if (!Array.isArray(recipe.omitted_ingredients)) {
-        recipe.omitted_ingredients = [];
-      }
-      if (!Array.isArray(recipe.instructions)) {
-        recipe.instructions = [recipe.instructions || ''];
+      // Handle both formats: { recipes: [...] } or direct array
+      let recipes: Recipe[] = [];
+      if (parsed.recipes && Array.isArray(parsed.recipes)) {
+        recipes = parsed.recipes;
+      } else if (Array.isArray(parsed)) {
+        recipes = parsed;
+      } else {
+        return NextResponse.json(
+          { error: 'Invalid response format from OpenAI' },
+          { status: 500 }
+        );
       }
 
-      return NextResponse.json(recipe);
+      // Validate and clean recipes
+      const validRecipes: Recipe[] = recipes
+        .filter((r: any) => r.title && r.ingredients && r.instructions)
+        .map((r: any) => ({
+          title: r.title || 'Namnlöst Recept',
+          ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+          instructions: Array.isArray(r.instructions) ? r.instructions : [],
+          search_query: r.search_query || r.title || '',
+        }))
+        .slice(0, 3); // Ensure max 3 recipes
+
+      if (validRecipes.length === 0) {
+        return NextResponse.json(
+          { error: 'No valid recipes generated' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ recipes: validRecipes });
     } catch (parseError) {
       console.error('Error parsing OpenAI response:', parseError);
+      console.error('Raw response:', content);
       return NextResponse.json(
-        { error: 'Failed to parse recipe response', details: content },
+        { error: 'Failed to parse recipe response', details: content.substring(0, 200) },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error generating recipe:', error);
+    console.error('Error generating recipes:', error);
     return NextResponse.json(
-      { error: 'Failed to generate recipe', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to generate recipes', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

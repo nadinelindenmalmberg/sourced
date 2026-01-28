@@ -2,107 +2,75 @@
 
 import { useState, useEffect } from 'react';
 import { Deal } from './api/deals/route';
-import { generateRandomSelection } from './utils/randomSelection';
+import DealsGrid from '../components/DealsGrid';
+import { ChefHat } from 'lucide-react';
 
 interface Recipe {
-  recipe_title: string;
-  ingredients_used: string[];
-  omitted_ingredients: string[];
+  title: string;
+  ingredients: string[];
   instructions: string[];
   search_query: string;
 }
 
+interface RecipeResponse {
+  recipes: Recipe[];
+}
+
 export default function Home() {
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [selectedIngredients, setSelectedIngredients] = useState<Deal[]>([]);
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingDeals, setLoadingDeals] = useState(false);
-  const [loadingRandom, setLoadingRandom] = useState(false);
-  const [highlightedItems, setHighlightedItems] = useState<Set<string>>(new Set());
+  const [storeId, setStoreId] = useState('4547');
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch deals on mount
   useEffect(() => {
     fetchDeals();
-  }, []);
+  }, [storeId]);
 
   const fetchDeals = async () => {
     setLoadingDeals(true);
+    setError(null);
     try {
-      const response = await fetch('/api/deals');
+      const response = await fetch(`/api/deals?storeId=${storeId}`);
       const data = await response.json();
-      if (data.deals) {
+      
+      if (data.error) {
+        setError(data.error);
+        setDeals([]);
+      } else if (data.deals && data.deals.length > 0) {
         setDeals(data.deals);
-        // Log source for debugging
-        if (data.source) {
-          console.log(`Deals loaded from: ${data.source}`, data);
-        }
-        if (data.warning) {
-          console.warn(data.warning);
-        }
-      } else if (data.error) {
-        console.error('API Error:', data.error);
-        alert(`Kunde inte ladda erbjudanden: ${data.error}`);
+        console.log(`✅ Loaded ${data.deals.length} deals from ${data.source || 'API'}`);
+      } else {
+        setError('Inga erbjudanden hittades');
+        setDeals([]);
       }
     } catch (error) {
       console.error('Error fetching deals:', error);
-      alert('Ett fel uppstod vid hämtning av erbjudanden. Kontrollera konsolen för detaljer.');
+      setError('Ett fel uppstod vid hämtning av erbjudanden');
+      setDeals([]);
     } finally {
       setLoadingDeals(false);
     }
   };
 
-  const toggleIngredient = (deal: Deal) => {
+  const toggleIngredient = (name: string) => {
     setSelectedIngredients(prev => {
-      const exists = prev.find(d => d.name === deal.name && d.price === deal.price);
-      if (exists) {
-        return prev.filter(d => !(d.name === deal.name && d.price === deal.price));
+      if (prev.includes(name)) {
+        return prev.filter(n => n !== name);
       } else {
-        return [...prev, deal];
+        return [...prev, name];
       }
     });
-    setHighlightedItems(new Set());
   };
 
-  const handleRandomSelection = async () => {
-    if (deals.length === 0) {
-      await fetchDeals();
-    }
-    
-    setLoadingRandom(true);
-    setRecipe(null);
-    
-    // Simulate a small delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const randomSelection = generateRandomSelection(deals);
-    setSelectedIngredients(randomSelection);
-    
-    // Highlight the selected items
-    const highlightSet = new Set(randomSelection.map(d => `${d.name}-${d.price}`));
-    setHighlightedItems(highlightSet);
-    
-    // Scroll to selected items after a brief delay
-    setTimeout(() => {
-      const firstSelected = document.querySelector('[data-selected="true"]');
-      if (firstSelected) {
-        firstSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-    
-    setLoadingRandom(false);
-    
-    // Automatically generate recipe
-    if (randomSelection.length > 0) {
-      await generateRecipe(randomSelection);
-    }
-  };
-
-  const generateRecipe = async (ingredients: Deal[]) => {
-    if (ingredients.length === 0) return;
+  const generateRecipes = async () => {
+    if (selectedIngredients.length < 2) return;
     
     setLoading(true);
-    setRecipe(null);
+    setRecipes([]);
     
     try {
       const response = await fetch('/api/generate', {
@@ -111,92 +79,95 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ingredients: ingredients.map(i => ({
-            name: i.name,
-            price: i.price,
-          })),
+          ingredients: selectedIngredients,
         }),
       });
       
-      const data = await response.json();
+      const data: RecipeResponse = await response.json();
+      
       if (data.error) {
-        console.error('Error generating recipe:', data.error);
+        console.error('Error generating recipes:', data.error);
         alert('Kunde inte generera recept. Försök igen.');
-      } else {
-        setRecipe(data);
-        // Scroll to recipe
+      } else if (data.recipes && data.recipes.length > 0) {
+        setRecipes(data.recipes);
+        // Scroll to recipes
         setTimeout(() => {
-          const recipeElement = document.getElementById('recipe');
+          const recipeElement = document.getElementById('recipes');
           if (recipeElement) {
             recipeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }, 100);
+      } else {
+        alert('Inga recept kunde genereras. Försök igen.');
       }
     } catch (error) {
-      console.error('Error generating recipe:', error);
+      console.error('Error generating recipes:', error);
       alert('Ett fel uppstod. Försök igen.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateRecipe = () => {
-    if (selectedIngredients.length > 0) {
-      generateRecipe(selectedIngredients);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 pb-24">
+      <div className="max-w-7xl mx-auto p-4 md:p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-2">
-            🛒 Hemköp Recept Generator
-          </h1>
-          <p className="text-gray-600">
-            Välj ingredienser eller låt oss välja åt dig!
-          </p>
-        </div>
-
-        {/* Button Group */}
-        <div className="flex flex-wrap gap-4 mb-6">
-          <button
-            onClick={handleCreateRecipe}
-            disabled={selectedIngredients.length === 0 || loading}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors shadow-lg"
-          >
-            {loading ? 'Genererar...' : `Skapa Recept (${selectedIngredients.length})`}
-          </button>
+          <div className="flex items-center gap-3 mb-4">
+            <ChefHat className="w-10 h-10 text-blue-600" />
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-800">
+              Hemköp Chef
+            </h1>
+          </div>
           
-          <button
-            onClick={handleRandomSelection}
-            disabled={loadingRandom || loadingDeals}
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg transform hover:scale-105"
-          >
-            {loadingRandom ? 'Väljer...' : '🎲 Chansa!'}
-          </button>
-
-          <button
-            onClick={fetchDeals}
-            disabled={loadingDeals}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
-          >
-            {loadingDeals ? 'Laddar...' : '🔄 Uppdatera Erbjudanden'}
-          </button>
+          {/* Store Selector */}
+          <div className="flex items-center gap-4">
+            <label htmlFor="storeId" className="text-gray-700 font-medium">
+              Butik ID:
+            </label>
+            <input
+              id="storeId"
+              type="text"
+              value={storeId}
+              onChange={(e) => setStoreId(e.target.value)}
+              onBlur={fetchDeals}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="4547"
+            />
+            <button
+              onClick={fetchDeals}
+              disabled={loadingDeals}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
+            >
+              {loadingDeals ? 'Laddar...' : 'Uppdatera'}
+            </button>
+          </div>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800">{error}</p>
+            <button
+              onClick={fetchDeals}
+              className="mt-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Försök igen
+            </button>
+          </div>
+        )}
 
         {/* Selected Ingredients Summary */}
         {selectedIngredients.length > 0 && (
           <div className="mb-6 p-4 bg-white rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-2">Valda Ingredienser:</h2>
+            <h2 className="text-xl font-semibold mb-2">Valda Ingredienser ({selectedIngredients.length}):</h2>
             <div className="flex flex-wrap gap-2">
-              {selectedIngredients.map((ingredient, idx) => (
+              {selectedIngredients.map((name, idx) => (
                 <span
-                  key={`${ingredient.name}-${ingredient.price}-${idx}`}
-                  className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+                  key={`${name}-${idx}`}
+                  className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
                 >
-                  {ingredient.name} ({ingredient.price} kr)
+                  {name}
                 </span>
               ))}
             </div>
@@ -209,49 +180,43 @@ export default function Home() {
           </div>
         )}
 
-        {/* Recipe Display */}
-        {recipe && (
-          <div id="recipe" className="mb-8 p-6 bg-white rounded-lg shadow-lg">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">{recipe.recipe_title}</h2>
-            
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold mb-2">Ingredienser som används:</h3>
-              <ul className="list-disc list-inside space-y-1">
-                {recipe.ingredients_used.map((ing, idx) => (
-                  <li key={idx} className="text-gray-700">{ing}</li>
-                ))}
-              </ul>
-            </div>
+        {/* Recipes Display */}
+        {recipes.length > 0 && (
+          <div id="recipes" className="mb-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Genererade Recept</h2>
+            <div className="space-y-6">
+              {recipes.map((recipe, idx) => (
+                <div key={idx} className="p-6 bg-white rounded-lg shadow-lg">
+                  <h3 className="text-2xl font-bold text-gray-800 mb-4">{recipe.title}</h3>
+                  
+                  <div className="mb-4">
+                    <h4 className="text-lg font-semibold mb-2">Ingredienser:</h4>
+                    <ul className="list-disc list-inside space-y-1">
+                      {recipe.ingredients.map((ing, i) => (
+                        <li key={i} className="text-gray-700">{ing}</li>
+                      ))}
+                    </ul>
+                  </div>
 
-            {recipe.omitted_ingredients.length > 0 && (
-              <div className="mb-4 p-3 bg-yellow-50 rounded">
-                <h3 className="text-lg font-semibold mb-1 text-yellow-800">Hoppade över:</h3>
-                <ul className="list-disc list-inside">
-                  {recipe.omitted_ingredients.map((ing, idx) => (
-                    <li key={idx} className="text-yellow-700">{ing}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                  <div className="mb-4">
+                    <h4 className="text-lg font-semibold mb-2">Instruktioner:</h4>
+                    <ol className="list-decimal list-inside space-y-2">
+                      {recipe.instructions.map((step, i) => (
+                        <li key={i} className="text-gray-700">{step}</li>
+                      ))}
+                    </ol>
+                  </div>
 
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold mb-2">Instruktioner:</h3>
-              <ol className="list-decimal list-inside space-y-2">
-                {recipe.instructions.map((step, idx) => (
-                  <li key={idx} className="text-gray-700">{step}</li>
-                ))}
-              </ol>
-            </div>
-
-            <div className="mt-4">
-              <a
-                href={`https://www.google.com/search?q=${encodeURIComponent(recipe.search_query)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 underline"
-              >
-                🔍 Sök efter liknande recept
-              </a>
+                  <a
+                    href={`https://www.google.com/search?q=${encodeURIComponent(recipe.search_query)}+site:ica.se+OR+site:arla.se+OR+site:koket.se`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    🔍 Hitta liknande recept på nätet
+                  </a>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -263,69 +228,32 @@ export default function Home() {
           </h2>
         </div>
 
-        {loadingDeals ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Laddar erbjudanden...</p>
-          </div>
-        ) : deals.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow-md">
-            <p className="text-gray-600">Inga erbjudanden hittades. Klicka på "Uppdatera Erbjudanden" för att ladda.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {deals.map((deal, idx) => {
-              const isSelected = selectedIngredients.some(
-                sel => sel.name === deal.name && sel.price === deal.price
-              );
-              const isHighlighted = highlightedItems.has(`${deal.name}-${deal.price}`);
-              
-              return (
-                <div
-                  key={`${deal.name}-${deal.price}-${idx}`}
-                  data-selected={isSelected}
-                  onClick={() => toggleIngredient(deal)}
-                  className={`p-4 bg-white rounded-lg shadow-md cursor-pointer transition-all transform hover:scale-105 ${
-                    isSelected ? 'ring-4 ring-blue-500' : ''
-                  } ${
-                    isHighlighted ? 'animate-pulse ring-4 ring-purple-500' : ''
-                  }`}
-                  onAnimationEnd={() => {
-                    if (isHighlighted) {
-                      setHighlightedItems(prev => {
-                        const newSet = new Set(prev);
-                        newSet.delete(`${deal.name}-${deal.price}`);
-                        return newSet;
-                      });
-                    }
-                  }}
-                >
-                  <h3 className="font-semibold text-gray-800 mb-2">{deal.name}</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold text-blue-600">{deal.price} kr</span>
-                    {deal.originalPrice && deal.originalPrice > deal.price && (
-                      <span className="text-sm text-gray-500 line-through">
-                        {deal.originalPrice} kr
-                      </span>
-                    )}
-                  </div>
-                  {deal.discount && (
-                    <span className="text-sm text-green-600 font-medium">
-                      -{deal.discount}%
-                    </span>
-                  )}
-                  {deal.category && (
-                    <span className="text-xs text-gray-500 mt-1 block">{deal.category}</span>
-                  )}
-                  {isSelected && (
-                    <div className="mt-2 text-sm text-blue-600 font-medium">✓ Vald</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <DealsGrid
+          deals={deals}
+          selectedIngredients={selectedIngredients}
+          onToggleIngredient={toggleIngredient}
+          loading={loadingDeals}
+        />
       </div>
+
+      {/* Floating Action Button */}
+      <button
+        onClick={generateRecipes}
+        disabled={selectedIngredients.length < 2 || loading}
+        className="fixed bottom-6 right-6 px-6 py-4 bg-blue-600 text-white rounded-full shadow-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all transform hover:scale-105 z-50 flex items-center gap-2"
+      >
+        {loading ? (
+          <>
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            <span>Genererar...</span>
+          </>
+        ) : (
+          <>
+            <ChefHat className="w-5 h-5" />
+            <span>Skapa Recept ({selectedIngredients.length})</span>
+          </>
+        )}
+      </button>
     </main>
   );
 }
