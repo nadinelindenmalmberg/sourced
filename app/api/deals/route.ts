@@ -90,49 +90,199 @@ export async function GET() {
       'påsar', 'rengöring', 'städning', 'tvättmedel', 'mjukgörare'
     ];
 
-    // Try Puppeteer first if available
+    // Try Puppeteer first if available (with timeout to prevent hanging)
     const puppeteerModule = await getPuppeteer();
     if (puppeteerModule) {
       console.log('Using Puppeteer to scrape Hemköp...');
-      const browser = await puppeteerModule.default.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
+      let browser: any = null;
+      const puppeteerTimeout = 45000; // 45 second total timeout for Puppeteer
+      const startTime = Date.now();
       
       try {
+        browser = await Promise.race([
+          puppeteerModule.default.launch({
+            headless: 'new', // Use new headless mode
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Browser launch timeout')), 10000)
+          )
+        ]) as any;
+        
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.setViewport({ width: 1920, height: 1080 });
         
         // Try different URL patterns
         const urlsToTry = [
           'https://www.hemkop.se/erbjudanden',
           'https://www.hemkop.se/artikel/alltid-bra-pris',
-          'https://www.hemkop.se/handla',
         ];
         
         for (const url of urlsToTry) {
+          // Check timeout
+          if (Date.now() - startTime > puppeteerTimeout) {
+            console.log('Puppeteer timeout reached, stopping');
+            break;
+          }
+          
+          let pageDeals: any[] = [];
+          let currentPage: any = null;
           try {
             console.log(`Trying URL: ${url}`);
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
             
-            // Wait for content to load
-            await page.waitForTimeout(3000);
+            // Create a new page for each URL to avoid frame issues
+            currentPage = await browser.newPage();
+            
+            // Set up error handlers before navigation
+            const errors: string[] = [];
+            currentPage.on('pageerror', (error: Error) => {
+              errors.push(`Page error: ${error.message}`);
+            });
+            
+            currentPage.on('error', (error: Error) => {
+              errors.push(`Error: ${error.message}`);
+            });
+            
+            await currentPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+            await currentPage.setViewport({ width: 1920, height: 1080 });
+            
+            // Navigate with proper error handling
+            let navigationSuccess = false;
+            try {
+              const response = await Promise.race([
+                currentPage.goto(url, { 
+                  waitUntil: 'networkidle0',
+                  timeout: 20000 
+                }),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Navigation timeout')), 20000)
+                )
+              ]) as any;
+              
+              if (response && response.ok && response.status() < 400) {
+                navigationSuccess = true;
+                console.log(`Successfully navigated to ${url}`);
+              } else {
+                console.log(`Page ${url} returned status: ${response?.status() || 'unknown'}`);
+              }
+            } catch (navError: any) {
+              console.log(`Navigation failed for ${url}: ${navError.message}`);
+              // Try with a simpler wait strategy
+              try {
+                await currentPage.goto(url, { 
+                  waitUntil: 'load',
+                  timeout: 10000 
+                });
+                navigationSuccess = true;
+                console.log(`Navigation succeeded with 'load' strategy`);
+              } catch (e2: any) {
+                console.log(`Second navigation attempt also failed: ${e2.message}`);
+              }
+            }
+            
+            if (!navigationSuccess) {
+              if (currentPage) {
+                try {
+                  await currentPage.close();
+                } catch (e) {
+                  // Ignore
+                }
+              }
+              continue;
+            }
+            
+            // Wait for content to load - try to find product indicators
+            try {
+              // Wait for body to be present
+              await currentPage.waitForSelector('body', { timeout: 5000 });
+              
+              // Wait a bit more for dynamic content
+              await new Promise(resolve => setTimeout(resolve, 4000));
+              
+              // Check if page is still valid
+              const pageValid = await currentPage.evaluate(() => {
+                return document.body && document.body.innerText.length > 100;
+              }).catch(() => false);
+              
+              if (!pageValid) {
+                console.log(`Page ${url} content not ready`);
+                if (currentPage) {
+                  try {
+                    await currentPage.close();
+                  } catch (e) {
+                    // Ignore
+                  }
+                }
+                continue;
+              }
+            } catch (e: any) {
+              console.log(`Error waiting for content on ${url}: ${e.message}`);
+              if (currentPage) {
+                try {
+                  await currentPage.close();
+                } catch (e2) {
+                  // Ignore
+                }
+              }
+              continue;
+            }
             
             // Try to intercept network requests to find API calls
             const apiCalls: string[] = [];
-            page.on('response', (response: any) => {
-              const url = response.url();
-              if (url.includes('api') || url.includes('product') || url.includes('offer') || url.includes('erbjudande')) {
-                apiCalls.push(url);
+            const responseHandler = (response: any) => {
+              try {
+                const url = response.url();
+                if (url.includes('api') || url.includes('product') || url.includes('offer') || url.includes('erbjudande')) {
+                  apiCalls.push(url);
+                }
+              } catch (e) {
+                // Ignore errors in response handler
               }
-            });
+            };
+            currentPage.on('response', responseHandler);
             
             // Wait a bit for API calls to happen
-            await page.waitForTimeout(2000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Try to extract product data from the page
-            const pageDeals = await page.evaluate((nonFoodKeywords: string[]) => {
+            try {
+              pageDeals = await currentPage.evaluate((nonFoodKeywords: string[]) => {
               const deals: any[] = [];
+              
+              // First, try to find any text content that looks like products
+              const bodyText = document.body.innerText || '';
+              const lines = bodyText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+              
+              // Look for product-like patterns: name followed by price
+              for (let i = 0; i < lines.length - 1; i++) {
+                const line = lines[i];
+                const nextLine = lines[i + 1];
+                
+                // Check if current line looks like a product name and next line has a price
+                const priceMatch = nextLine.match(/(\d+)[,\s]*(\d+)?\s*kr/i);
+                if (priceMatch && line.length > 3 && line.length < 80 && !line.match(/^\d/)) {
+                  const priceStr = priceMatch[1] || priceMatch[2];
+                  const price = parseFloat(priceStr?.replace(/\s/g, '') || '0');
+                  
+                  if (price > 0 && price < 1000) {
+                    const isNonFood = nonFoodKeywords.some((keyword: string) => 
+                      line.toLowerCase().includes(keyword.toLowerCase())
+                    );
+                    
+                    if (!isNonFood) {
+                      // Check for duplicate
+                      const isDuplicate = deals.some(d => d.name === line && d.price === price);
+                      if (!isDuplicate) {
+                        deals.push({
+                          name: line.substring(0, 100),
+                          price,
+                        });
+                      }
+                    }
+                  }
+                }
+              }
               
               // Strategy 1: Look for product cards/containers
               const productSelectors = [
@@ -152,7 +302,6 @@ export async function GET() {
                   const found = Array.from(document.querySelectorAll(selector));
                   if (found.length > 2) { // Need at least a few to be confident
                     productElements = found;
-                    console.log(`Found ${found.length} elements with selector: ${selector}`);
                     break;
                   }
                 } catch (e) {
@@ -172,8 +321,6 @@ export async function GET() {
                   return hasPrice && hasName && (childCount > 0 || el.querySelector('img'));
                 });
               }
-              
-              console.log(`Found ${productElements.length} potential product elements`);
               
               for (const element of productElements.slice(0, 150)) {
                 try {
@@ -274,31 +421,80 @@ export async function GET() {
                 }
               }
               
-              console.log(`Extracted ${deals.length} deals from page`);
-              return deals;
-            }, nonFoodKeywords);
+                console.log(`Extracted ${deals.length} deals from page`);
+                return deals;
+              }, nonFoodKeywords);
+              
+              console.log(`Successfully extracted ${pageDeals.length} deals from ${url}`);
+            } catch (evalError: any) {
+              console.error(`Error evaluating page ${url}:`, evalError.message || evalError);
+              pageDeals = [];
+            }
             
-            // If we found API calls, try to fetch from them
-            if (apiCalls.length > 0 && pageDeals.length === 0) {
+            // Remove response handler before closing
+            try {
+              currentPage.off('response', responseHandler);
+            } catch (e) {
+              // Ignore
+            }
+            
+            // If we found API calls, log them
+            if (apiCalls.length > 0) {
               console.log(`Found ${apiCalls.length} potential API endpoints:`, apiCalls.slice(0, 5));
-              // Could try to fetch from these endpoints, but they might require auth
             }
             
             if (pageDeals.length > 0) {
-              console.log(`Found ${pageDeals.length} deals from ${url}`);
+              console.log(`✅ Found ${pageDeals.length} deals from ${url}`);
               deals.push(...pageDeals);
+              try {
+                await currentPage.close();
+              } catch (e) {
+                // Ignore
+              }
               break; // Success, stop trying other URLs
             }
-          } catch (error) {
-            console.error(`Error scraping ${url}:`, error);
+            
+            // Close page if we didn't get deals
+            try {
+              await currentPage.close();
+            } catch (e) {
+              // Ignore close errors
+            }
+          } catch (error: any) {
+            console.error(`Error scraping ${url}:`, error.message || error);
+            if (currentPage) {
+              try {
+                await currentPage.close();
+              } catch (e) {
+                // Ignore close errors
+              }
+            }
+            // Continue to next URL
             continue;
           }
         }
         
-        await browser.close();
-      } catch (error) {
-        console.error('Puppeteer error:', error);
-        await browser.close();
+        if (browser) {
+          try {
+            await Promise.race([
+              browser.close(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Browser close timeout')), 5000)
+              )
+            ]);
+          } catch (e) {
+            console.log('Browser close had issues, continuing...');
+          }
+        }
+      } catch (error: any) {
+        console.error('Puppeteer error:', error.message || error);
+        if (browser) {
+          try {
+            await browser.close().catch(() => {});
+          } catch (e) {
+            // Ignore close errors
+          }
+        }
       }
     }
     
