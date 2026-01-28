@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Deal } from './api/deals/route';
 import DealsGrid from '../components/DealsGrid';
 import { ChefHat, Sparkles } from 'lucide-react';
-import { generateRandomSelection, generatePromotionBasedSelection } from './utils/randomSelection';
+import { recommendBestSelection } from './utils/randomSelection';
 
 interface Recipe {
   title: string;
@@ -25,6 +25,7 @@ export default function Home() {
   const [loadingDeals, setLoadingDeals] = useState(false);
   const [storeId, setStoreId] = useState('4547');
   const [error, setError] = useState<string | null>(null);
+  const [recommendationInfo, setRecommendationInfo] = useState<string[] | null>(null);
 
   // Fetch deals on mount
   useEffect(() => {
@@ -80,30 +81,33 @@ export default function Home() {
     
     setLoading(true);
     setRecipes([]);
-    
-    // Use promotion-based selection for better recipe suggestions
-    const randomSelection = generatePromotionBasedSelection(deals);
-    
-    if (randomSelection.length === 0) {
+
+    // Deterministic “best” recommendation (not random)
+    const rec = recommendBestSelection(deals);
+    const chosen = rec.ingredients;
+    setRecommendationInfo(rec.rationale);
+
+    if (chosen.length === 0) {
       setLoading(false);
       alert('Inga ingredienser hittades. Försök igen senare.');
       return;
     }
     
-    console.log('🎲 Selected ingredients:', randomSelection);
-    setSelectedIngredients(randomSelection);
+    console.log('⭐ Recommended ingredients:', chosen);
+    setSelectedIngredients(chosen);
     
     // Scroll to show selected items
     setTimeout(() => {
       window.scrollTo({ top: 400, behavior: 'smooth' });
     }, 300);
     
-    // Automatically generate recipes
-    await generateRecipes();
+    // IMPORTANT: generate with the chosen list (don’t rely on async state)
+    await generateRecipes(chosen);
   };
 
-  const generateRecipes = async () => {
-    if (selectedIngredients.length < 2) return;
+  const generateRecipes = async (ingredientsOverride?: string[]) => {
+    const ingredientsToUse = ingredientsOverride ?? selectedIngredients;
+    if (ingredientsToUse.length < 2) return;
     
     setLoading(true);
     setRecipes([]);
@@ -115,7 +119,11 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ingredients: selectedIngredients,
+          ingredients: ingredientsToUse,
+          // send deal context for better recommendations
+          deals: deals
+            .filter(d => ingredientsToUse.includes(d.name))
+            .map(d => ({ name: d.name, promotion: d.promotion, price: d.price, unit: d.unit, category: d.category })),
         }),
       });
       
@@ -166,17 +174,17 @@ export default function Home() {
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>Genererar recept baserat på erbjudanden...</span>
+                  <span>Rekommenderar &amp; genererar recept...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-6 h-6" />
-                  <span>🎲 Chansa! Ge mig ett recept baserat på erbjudanden</span>
+                  <span>⭐ Rekommendera recept (bästa från erbjudanden)</span>
                 </>
               )}
             </button>
             <p className="mt-3 text-sm text-gray-700 text-center">
-              Låt oss automatiskt välja ingredienser från kampanjer och skapa 3 kreativa recept åt dig!
+              Vi väljer en “bäst match”-korg (protein + tillbehör) från erbjudandena och skapar 3 recept.
             </p>
             {deals.length > 0 && (
               <p className="mt-1 text-xs text-gray-600 text-center">
@@ -257,10 +265,23 @@ export default function Home() {
                 );
               })}
             </div>
+
+            {recommendationInfo && recommendationInfo.length > 0 && (
+              <div className="mt-4 p-3 bg-white/70 rounded-lg border border-green-200">
+                <div className="text-sm font-semibold text-gray-800 mb-1">Varför dessa?</div>
+                <ul className="text-xs text-gray-700 list-disc list-inside space-y-1">
+                  {recommendationInfo.slice(0, 8).map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setSelectedIngredients([]);
                 setRecipes([]);
+                setRecommendationInfo(null);
               }}
               className="mt-3 text-sm text-red-600 hover:text-red-800 font-medium"
             >
@@ -357,7 +378,7 @@ export default function Home() {
 
       {/* Floating Action Button */}
       <button
-        onClick={generateRecipes}
+        onClick={() => generateRecipes()}
         disabled={selectedIngredients.length < 2 || loading}
         className="fixed bottom-6 right-6 px-6 py-4 bg-blue-600 text-white rounded-full shadow-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all transform hover:scale-105 z-50 flex items-center gap-2"
       >

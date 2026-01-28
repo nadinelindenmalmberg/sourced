@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Search for recipes on Swedish recipe sites
  * This endpoint can be used to find real recipes from Swedish sites

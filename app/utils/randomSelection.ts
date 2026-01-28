@@ -4,145 +4,141 @@ const NON_FOOD_KEYWORDS = [
   'tvätt', 'disk', 'blöjor', 'tandkräm', 'shampoo', 'balsam',
   'deodorant', 'tvål', 'toalettpapper', 'servetter', 'plast',
   'påsar', 'rengöring', 'städning', 'tvättmedel', 'mjukgörare',
-  'blekmedel', 'tuggummi', 'godis', 'chips', 'läsk', 'soda'
+  'blekmedel',
 ];
 
 const NON_FOOD_CATEGORIES = ['Hushåll', 'Djur', 'Hälsa', 'Hygien', 'Städning'];
 
-const PRICE_THRESHOLD = 40; // SEK
+// Penalize “not dinner” items hard so recommendation feels useful.
+const SNACK_DESSERT_KEYWORDS = [
+  'munk', 'kaka', 'kakor', 'bull', 'bulle', 'bakelse', 'tårta', 'choklad',
+  'godis', 'chips', 'läsk', 'juice', 'lemonad', 'energidryck', 'glass',
+];
 
-/**
- * Filters out non-food items from the deals list
- */
-function filterFoodItems(deals: Deal[]): Deal[] {
-  return deals.filter(deal => {
-    // Filter by category
-    const category = deal.category?.toLowerCase() || '';
-    const isNonFoodCategory = NON_FOOD_CATEGORIES.some(nonFood => 
-      category.includes(nonFood.toLowerCase())
-    );
-    
-    if (isNonFoodCategory) return false;
-    
-    // Filter by name keywords
-    const nameLower = deal.name.toLowerCase();
-    const isNonFoodKeyword = NON_FOOD_KEYWORDS.some(keyword => 
-      nameLower.includes(keyword.toLowerCase())
-    );
-    
-    return !isNonFoodKeyword;
-  });
+type DealRole = 'protein' | 'veg' | 'carb' | 'sauce_dairy' | 'other';
+
+function isNonFood(deal: Deal): boolean {
+  const category = deal.category?.toLowerCase() || '';
+  if (NON_FOOD_CATEGORIES.some((c) => category.includes(c.toLowerCase()))) return true;
+  const nameLower = deal.name.toLowerCase();
+  return NON_FOOD_KEYWORDS.some((k) => nameLower.includes(k));
+}
+
+function guessRole(deal: Deal): DealRole {
+  const n = deal.name.toLowerCase();
+  const c = (deal.category || '').toLowerCase();
+
+  if (
+    n.includes('kyck') || n.includes('lax') || n.includes('fisk') || n.includes('torsk') ||
+    n.includes('räk') || n.includes('kött') || n.includes('färs') || n.includes('bacon') ||
+    n.includes('korv') || n.includes('fläsk') || n.includes('filé') ||
+    c.includes('fisk') || c.includes('kött')
+  ) return 'protein';
+
+  if (
+    n.includes('potatis') || n.includes('ris') || n.includes('pasta') || n.includes('nudel') ||
+    n.includes('tortilla') || n.includes('bröd') || n.includes('wrap') ||
+    c.includes('torrvaror')
+  ) return 'carb';
+
+  if (
+    n.includes('grädd') || n.includes('crème') || n.includes('creme') || n.includes('ost') ||
+    n.includes('mjölk') || n.includes('smör') || n.includes('yogh') ||
+    n.includes('sås') || n.includes('buljong') || n.includes('fond')
+  ) return 'sauce_dairy';
+
+  if (
+    n.includes('lök') || n.includes('vitlök') || n.includes('paprika') || n.includes('tomat') ||
+    n.includes('gurk') || n.includes('morot') || n.includes('broccoli') || n.includes('blomkål') ||
+    n.includes('svamp') || n.includes('champ') || n.includes('spenat') || n.includes('sallad') ||
+    c.includes('grön') || c.includes('frukt') // fruit is imperfect but better than “other”
+  ) return 'veg';
+
+  return 'other';
+}
+
+function scoreDeal(deal: Deal): number {
+  const n = deal.name.toLowerCase();
+  const role = guessRole(deal);
+
+  let score = 0;
+
+  // Base: things that can become dinner.
+  if (role === 'protein') score += 120;
+  if (role === 'carb') score += 60;
+  if (role === 'veg') score += 55;
+  if (role === 'sauce_dairy') score += 45;
+  if (role === 'other') score += 10;
+
+  // Penalize fika/snacks.
+  if (SNACK_DESSERT_KEYWORDS.some((k) => n.includes(k))) score -= 140;
+
+  // Prefer items with meaningful “promotion” text (they all have it, but some are more meal-like anyway).
+  if (deal.promotion && deal.promotion.trim().length > 0) score += 10;
+
+  // Prefer mid/high price proteins (often “main”).
+  if (role === 'protein') score += Math.min(40, Math.max(0, deal.price - 30));
+
+  // Avoid weird items with price 0.
+  if (!deal.price || deal.price <= 0) score -= 50;
+
+  return score;
+}
+
+export interface Recommendation {
+  ingredients: string[];
+  pickedDeals: Deal[];
+  rationale: string[];
 }
 
 /**
- * Generates a random selection of ingredients using the price heuristic algorithm
- * @param deals - Array of all available deals
- * @returns Array of 4-6 selected deal names (1-2 mains + 3-4 sides)
+ * Deterministic “best recommendation” from the current deals list.
+ * Picks a coherent set for cooking: protein + carb + veg + sauce/dairy (then fills).
  */
-export function generateRandomSelection(deals: Deal[]): string[] {
-  // Filter out non-food items
-  const foodItems = filterFoodItems(deals);
-  
-  if (foodItems.length === 0) {
-    return [];
+export function recommendBestSelection(deals: Deal[]): Recommendation {
+  const food = deals.filter((d) => !isNonFood(d));
+  const sorted = [...food].sort((a, b) => scoreDeal(b) - scoreDeal(a));
+
+  const picked: Deal[] = [];
+  const rationale: string[] = [];
+  const usedNames = new Set<string>();
+
+  const pickBest = (role: DealRole) => {
+    const candidate = sorted.find((d) => !usedNames.has(d.name) && guessRole(d) === role);
+    if (!candidate) return;
+    picked.push(candidate);
+    usedNames.add(candidate.name);
+    rationale.push(`${candidate.name}: ${role} (${candidate.promotion || `${candidate.price} kr/${candidate.unit}`})`);
+  };
+
+  // Core meal structure.
+  pickBest('protein');
+  pickBest('carb');
+  pickBest('veg');
+  pickBest('sauce_dairy');
+
+  // Fill to 5-6 items with best remaining meal-like items.
+  for (const d of sorted) {
+    if (picked.length >= 6) break;
+    if (usedNames.has(d.name)) continue;
+    // Skip heavy snack/dessert unless we have almost nothing else.
+    const n = d.name.toLowerCase();
+    if (SNACK_DESSERT_KEYWORDS.some((k) => n.includes(k))) continue;
+    picked.push(d);
+    usedNames.add(d.name);
   }
 
-  // Segment by price
-  const mains = foodItems.filter(item => item.price > PRICE_THRESHOLD);
-  const sides = foodItems.filter(item => item.price <= PRICE_THRESHOLD);
-
-  const selected: string[] = [];
-
-  // Pick 1-2 random mains (high value items)
-  const numMains = mains.length > 0 ? Math.min(2, Math.floor(Math.random() * 2) + 1) : 0;
-  const availableMains = [...mains];
-  
-  for (let i = 0; i < numMains && availableMains.length > 0; i++) {
-    const randomIndex = Math.floor(Math.random() * availableMains.length);
-    selected.push(availableMains[randomIndex].name);
-    availableMains.splice(randomIndex, 1);
+  // Last resort: if still too small, allow anything food-like.
+  for (const d of sorted) {
+    if (picked.length >= 4) break;
+    if (usedNames.has(d.name)) continue;
+    picked.push(d);
+    usedNames.add(d.name);
   }
 
-  // Pick 3-4 random sides (or fill remaining slots if no mains)
-  const numSides = mains.length > 0 ? Math.min(4, Math.floor(Math.random() * 2) + 3) : 6;
-  const availableSides = [...sides];
-  
-  // Remove any mains that were selected from sides list
-  const selectedMainNames = new Set(selected);
-  const filteredSides = availableSides.filter(side => !selectedMainNames.has(side.name));
-  
-  for (let i = 0; i < numSides && filteredSides.length > 0; i++) {
-    const randomIndex = Math.floor(Math.random() * filteredSides.length);
-    selected.push(filteredSides[randomIndex].name);
-    filteredSides.splice(randomIndex, 1);
-  }
-
-  // Fallback: if we don't have enough items, fill with random items from the general list
-  if (selected.length < 4 && foodItems.length >= 4) {
-    const remaining = 4 - selected.length;
-    const selectedSet = new Set(selected);
-    const availableItems = foodItems.filter(
-      item => !selectedSet.has(item.name)
-    );
-    
-    for (let i = 0; i < remaining && availableItems.length > 0; i++) {
-      const randomIndex = Math.floor(Math.random() * availableItems.length);
-      selected.push(availableItems[randomIndex].name);
-      availableItems.splice(randomIndex, 1);
-    }
-  }
-
-  return selected;
-}
-
-/**
- * Generates a smart selection focusing on items with promotions
- */
-export function generatePromotionBasedSelection(deals: Deal[]): string[] {
-  const foodItems = filterFoodItems(deals);
-  
-  if (foodItems.length === 0) {
-    return [];
-  }
-
-  // Prioritize items with promotions
-  const itemsWithPromotions = foodItems.filter(item => item.promotion && item.promotion.length > 0);
-  const itemsWithoutPromotions = foodItems.filter(item => !item.promotion || item.promotion.length === 0);
-
-  const selected: string[] = [];
-  
-  // Pick 2-3 items with promotions (these are likely the best deals)
-  const numPromoItems = Math.min(3, itemsWithPromotions.length);
-  const availablePromoItems = [...itemsWithPromotions];
-  
-  for (let i = 0; i < numPromoItems && availablePromoItems.length > 0; i++) {
-    const randomIndex = Math.floor(Math.random() * availablePromoItems.length);
-    selected.push(availablePromoItems[randomIndex].name);
-    availablePromoItems.splice(randomIndex, 1);
-  }
-
-  // Fill remaining slots with regular items (mix of mains and sides)
-  const remaining = Math.max(2, 6 - selected.length);
-  const selectedSet = new Set(selected);
-  const availableItems = itemsWithoutPromotions.filter(item => !selectedSet.has(item.name));
-  
-  // Mix of price ranges
-  const mains = availableItems.filter(item => item.price > PRICE_THRESHOLD);
-  const sides = availableItems.filter(item => item.price <= PRICE_THRESHOLD);
-  
-  // Add 1 main if available
-  if (mains.length > 0 && selected.length < 6) {
-    const randomMain = mains[Math.floor(Math.random() * mains.length)];
-    selected.push(randomMain.name);
-  }
-  
-  // Fill rest with sides
-  const needed = 6 - selected.length;
-  for (let i = 0; i < needed && sides.length > 0; i++) {
-    const randomIndex = Math.floor(Math.random() * sides.length);
-    selected.push(sides[randomIndex].name);
-    sides.splice(randomIndex, 1);
-  }
-
-  return selected.slice(0, 6); // Max 6 items
+  return {
+    ingredients: picked.map((d) => d.name),
+    pickedDeals: picked,
+    rationale,
+  };
 }

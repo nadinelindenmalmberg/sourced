@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
+export const dynamic = 'force-dynamic';
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export interface RecipeRequest {
   ingredients: string[]; // Array of ingredient names
+  deals?: Array<{
+    name: string;
+    promotion?: string;
+    price?: number;
+    unit?: string;
+    category?: string;
+  }>;
 }
 
 export interface Recipe {
@@ -23,7 +32,7 @@ export interface RecipeResponse {
 export async function POST(request: NextRequest) {
   try {
     const body: RecipeRequest = await request.json();
-    const { ingredients } = body;
+    const { ingredients, deals } = body;
 
     if (!ingredients || ingredients.length < 2) {
       return NextResponse.json(
@@ -39,17 +48,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const systemPrompt = `You are a professional Swedish chef using local ingredients.
+    const systemPrompt = `You are a professional Swedish chef and meal planner specializing in turning discounted groceries into great dinners.
 
-Input: A list of discounted ingredients from Hemköp.
+Input: A list of discounted ingredients from Hemköp (often a mix of great cooking items and some fika/snacks).
 
-Task: Create 3 distinct, budget-friendly recipes using these ingredients.
+Task: Create 3 distinct, budget-friendly recipe recommendations that feel like genuinely good ideas.
 
 **Crucial:** 
 - You may assume the user has basic pantry staples (salt, pepper, oil, flour, butter, sugar, vinegar).
 - Each recipe should be practical and use Swedish cooking methods.
 - Recipes should be distinct from each other (different cooking styles, cuisines, or meal types).
 - Make the recipes budget-friendly and suitable for everyday cooking.
+- Prefer “proper food” (protein + veg + carb) over snacks/dessert. If an ingredient is clearly fika (e.g. donuts), avoid centering a dinner on it.
 
 **Output:** Return ONLY valid JSON matching this exact schema:
 {
@@ -65,6 +75,10 @@ Task: Create 3 distinct, budget-friendly recipes using these ingredients.
 
 The search_query should be a specific, descriptive query in Swedish that would help find similar recipes on Swedish recipe sites.`;
 
+    const dealContext = Array.isArray(deals) && deals.length > 0
+      ? `\n\nSale context (from Hemköp):\n${deals.map(d => `- ${d.name} (${d.promotion || ''}${d.price ? `, ca ${d.price} kr/${d.unit || ''}` : ''}${d.category ? `, kategori: ${d.category}` : ''})`).join('\n')}`
+      : '';
+
     const userPrompt = `Create 3 distinct, creative recipes using these ingredients that are CURRENTLY ON SALE at Hemköp:
 
 ${ingredients.map((ing, i) => `${i + 1}. ${ing} (ON SALE - use this prominently!)`).join('\n')}
@@ -76,7 +90,7 @@ Requirements:
 - Use the sale ingredients as the main stars of each dish
 - Be creative but realistic for Swedish home cooking
 
-Make sure each recipe is distinct and uses different cooking techniques or styles.`;
+Make sure each recipe is distinct and uses different cooking techniques or styles.${dealContext}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
