@@ -3,9 +3,13 @@ import OpenAI from 'openai';
 
 export const dynamic = 'force-dynamic';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI(): OpenAI {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) {
+    throw new Error('OPENAI API key not configured');
+  }
+  return new OpenAI({ apiKey: key });
+}
 
 export interface RecipeRequest {
   ingredients: string[]; // Array of ingredient names
@@ -41,9 +45,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    let openai: OpenAI;
+    try {
+      openai = getOpenAI();
+    } catch (e) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'OpenAI API key not configured. Set OPENAI_API_KEY in .env.local.' },
         { status: 500 }
       );
     }
