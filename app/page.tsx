@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { DifficultyMode, GeneratedRecipe, MatchedRecipe, RecipeItem } from '@/types';
-import { useDeals, useRecipeSuggestions } from '@/hooks';
+import { useDeals, useHemkopRecipes, useRecipeSuggestions } from '@/hooks';
 import { getDifficultyColor, getDifficultyText } from '@/lib/recipe-utils';
+import { matchHemkopRecipesToDeals } from '@/lib/hemkop-recipe-matcher';
 import DealsGrid from '@/components/DealsGrid';
 import {
   ChefHat,
@@ -14,6 +15,8 @@ import {
   Users,
   ShoppingCart,
   X,
+  ExternalLink,
+  BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,6 +36,7 @@ function buildAllRecipes(
 
 export default function Home() {
   const { deals, loading: loadingDeals, error: dealsError, storeId, setStoreId, fetchDeals } = useDeals('4547');
+  const { recipes: hemkopRecipes, loading: loadingHemkop, error: hemkopError, source: hemkopSource, fetchRecipes: fetchHemkopRecipes } = useHemkopRecipes();
   const {
     matchedRecipes,
     generatedRecipes,
@@ -83,6 +87,11 @@ export default function Home() {
 
   const loading = loadingSuggestions;
   const error = dealsError ?? suggestionsError;
+
+  const recipesWithDeals = useMemo(
+    () => matchHemkopRecipesToDeals(hemkopRecipes, deals),
+    [hemkopRecipes, deals]
+  );
 
   const currentItem = allRecipes[currentRecipeIndex];
   const isMatched = currentItem?.type === 'matched';
@@ -143,6 +152,125 @@ export default function Home() {
           onToggleIngredient={toggleIngredient}
           loading={loadingDeals}
         />
+
+        <div className="mt-10 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
+              Recept från Hemköp
+            </h2>
+            <Button
+              variant="outline"
+              onClick={() => fetchHemkopRecipes({ max: 30 })}
+              disabled={loadingHemkop}
+            >
+              {loadingHemkop ? (
+                <>
+                  <span className="animate-spin mr-2 inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+                  Laddar...
+                </>
+              ) : (
+                <>
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Visa recept
+                </>
+              )}
+            </Button>
+          </div>
+          {hemkopError && (
+            <p className="text-sm text-destructive mb-2">{hemkopError}</p>
+          )}
+          {recipesWithDeals.length > 0 && (
+            <p className="text-sm text-muted-foreground mb-3">
+              {recipesWithDeals.length} recept – sorterade efter hur många som passar till veckans erbjudanden
+            </p>
+          )}
+          {loadingHemkop && hemkopRecipes.length === 0 && (
+            <div className="flex items-center gap-3 py-8 text-muted-foreground">
+              <span className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
+              <span>Hämtar recept från hemkop.se/receptsok...</span>
+            </div>
+          )}
+          {!loadingHemkop && recipesWithDeals.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recipesWithDeals.map((recipe) => (
+                <Card key={recipe.id} className="overflow-hidden">
+                  {recipe.image && (
+                    <div className="relative w-full aspect-[4/3] bg-muted">
+                      <img
+                        src={recipe.image}
+                        alt={recipe.name}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                  )}
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap gap-1 mb-1">
+                      {recipe.time_minutes != null && (
+                        <Badge variant="outline" className="text-xs">
+                          <Clock className="w-3 h-3 mr-0.5" />
+                          {recipe.time_minutes} min
+                        </Badge>
+                      )}
+                      {recipe.servings != null && (
+                        <Badge variant="outline" className="text-xs">
+                          <Users className="w-3 h-3 mr-0.5" />
+                          {recipe.servings} port
+                        </Badge>
+                      )}
+                      {recipe.matchCount > 0 && (
+                        <Badge className="text-xs bg-green-600 hover:bg-green-700">
+                          <ShoppingCart className="w-3 h-3 mr-0.5" />
+                          {recipe.matchCount} på rea
+                        </Badge>
+                      )}
+                    </div>
+                    <CardTitle className="text-base leading-tight">{recipe.name}</CardTitle>
+                    {recipe.description && (
+                      <CardDescription className="line-clamp-2 text-sm">
+                        {recipe.description}
+                      </CardDescription>
+                    )}
+                    {recipe.matchedDeals.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">
+                          Ingredienser på rea:
+                        </p>
+                        <ul className="text-xs space-y-0.5">
+                          {recipe.matchedDeals.map((deal) => (
+                            <li key={deal.id} className="flex items-center gap-1">
+                              <ShoppingCart className="w-3 h-3 text-green-600 flex-shrink-0" />
+                              <span className="truncate">{deal.name}</span>
+                              {deal.promotion && (
+                                <span className="text-green-600 whitespace-nowrap">
+                                  {deal.promotion}
+                                </span>
+                              )}
+                              <span className="text-muted-foreground whitespace-nowrap">
+                                {deal.price} kr
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <a
+                        href={recipe.url || 'https://www.hemkop.se/receptsok'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="w-3 h-3 mr-2" />
+                        Öppna på Hemköp
+                      </a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
         {showDifficultySelector && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

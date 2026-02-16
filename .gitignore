@@ -24,6 +24,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# RAG index (run npm run ingest to generate)
+/data/recipe-embeddings.json
+
 # local env files
 .env*.local
 .env
