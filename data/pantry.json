@@ -1,0 +1,120 @@
+{
+  "version": "1.0",
+  "description": "Basvaror som antas finnas hemma - behöver inte köpas",
+  "categories": {
+    "kryddor": {
+      "name": "Kryddor & smaksättare",
+      "items": [
+        "salt",
+        "peppar",
+        "vitpeppar",
+        "svartpeppar",
+        "paprikapulver",
+        "curry",
+        "timjan",
+        "oregano",
+        "rosmarin",
+        "lagerblad",
+        "kanel",
+        "kardemumma",
+        "muskot",
+        "chilipulver",
+        "spiskummin",
+        "gurkmeja",
+        "ingefära pulver"
+      ]
+    },
+    "matfett": {
+      "name": "Matfett & oljor",
+      "items": [
+        "smör",
+        "olja",
+        "olivolja",
+        "rapsolja",
+        "matolja",
+        "kokosolja"
+      ]
+    },
+    "bas_torrvaror": {
+      "name": "Bas torrvaror",
+      "items": [
+        "mjöl",
+        "vetemjöl",
+        "ströbröd",
+        "rågmjöl",
+        "maizena",
+        "bakpulver",
+        "bikarbonat",
+        "jäst",
+        "socker",
+        "florsocker",
+        "vaniljsocker",
+        "sirap"
+      ]
+    },
+    "saser_smaksattare": {
+      "name": "Såser & smaksättare",
+      "items": [
+        "soja",
+        "sojasås",
+        "ketchup",
+        "senap",
+        "vinäger",
+        "ättika",
+        "balsamvinäger",
+        "tomatpuré",
+        "worcestershiresås",
+        "tabasco",
+        "sambal oelek"
+      ]
+    },
+    "buljong": {
+      "name": "Buljong & fond",
+      "items": [
+        "kycklingbuljong",
+        "grönsaksbuljong",
+        "köttbuljong",
+        "fiskbuljong",
+        "fond"
+      ]
+    },
+    "mejeri_bas": {
+      "name": "Bas mejeri (förutsätter att det finns)",
+      "items": [
+        "mjölk",
+        "ägg"
+      ]
+    },
+    "grönsaker_bas": {
+      "name": "Basgrönsaker (förutsätter att det finns)",
+      "items": [
+        "lök",
+        "vitlök",
+        "gul lök"
+      ]
+    },
+    "konserver": {
+      "name": "Vanliga konserver",
+      "items": [
+        "krossade tomater",
+        "kokosmjölk",
+        "majs",
+        "bönor"
+      ]
+    }
+  },
+  "all_items_flat": [
+    "salt", "peppar", "vitpeppar", "svartpeppar", "paprikapulver", "curry",
+    "timjan", "oregano", "basilika", "rosmarin", "lagerblad", "kanel",
+    "kardemumma", "muskot", "chilipulver", "spiskummin", "gurkmeja", "ingefära pulver",
+    "smör", "olja", "olivolja", "rapsolja", "matolja", "kokosolja",
+    "mjöl", "vetemjöl", "ströbröd", "rågmjöl", "maizena", "bakpulver", "bikarbonat",
+    "jäst", "socker", "florsocker", "vaniljsocker", "sirap",
+    "soja", "sojasås", "ketchup", "senap", "dijonsenap", "söt senap", "stark senap",
+    "vinäger", "ättika", "balsamvinäger", "tomatpuré", "worcestershiresås",
+    "tabasco", "sambal oelek", "fish sauce", "oyster sauce",
+    "kycklingbuljong", "grönsaksbuljong", "köttbuljong", "fiskbuljong", "fond",
+    "mjölk", "ägg", "lök", "vitlök", "gul lök",
+    "krossade tomater", "kokosmjölk", "majs", "bönor"
+  ]
+}

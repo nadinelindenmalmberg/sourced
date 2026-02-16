@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Hemköp Recipe Generator',
-  description: 'Generate recipes from Hemköp deals',
+  title: 'Sourced - Recept från veckans erbjudanden',
+  description: 'Hitta recept baserat på veckans erbjudanden från Hemköp',
   viewport: {
     width: 'device-width',
     initialScale: 1,
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Hemköp Chef',
+    title: 'Sourced',
   },
 }
 
@@ -28,7 +28,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Hemköp Chef" />
+        <meta name="apple-mobile-web-app-title" content="Sourced" />
       </head>
       <body>{children}</body>
     </html>

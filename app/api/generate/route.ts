@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { generateRecipeContext, SWEDISH_RECIPE_CONTEXT } from '@/lib/recipe-context';
 
 export const dynamic = 'force-dynamic';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI(): OpenAI {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) {
+    throw new Error('OPENAI API key not configured');
+  }
+  return new OpenAI({ apiKey: key });
+}
 
 export interface RecipeRequest {
-  ingredients: string[]; // Array of ingredient names
+  ingredients: string[];
+  difficulty?: 'easy' | 'medium' | 'hard' | 'varied';
   deals?: Array<{
     name: string;
     promotion?: string;
@@ -20,8 +26,17 @@ export interface RecipeRequest {
 
 export interface Recipe {
   title: string;
-  ingredients: string[];
+  description: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  time_minutes: number;
+  servings: number;
+  ingredients: Array<{
+    item: string;
+    amount: string;
+    from_deal?: boolean;
+  }>;
   instructions: string[];
+  tips?: string;
   search_query: string;
 }
 
@@ -32,65 +47,78 @@ export interface RecipeResponse {
 export async function POST(request: NextRequest) {
   try {
     const body: RecipeRequest = await request.json();
-    const { ingredients, deals } = body;
+    const { ingredients, difficulty = 'varied', deals } = body;
 
     if (!ingredients || ingredients.length < 2) {
       return NextResponse.json(
-        { error: 'At least 2 ingredients required' },
+        { error: 'Minst 2 ingredienser krävs' },
         { status: 400 }
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    let openai: OpenAI;
+    try {
+      openai = getOpenAI();
+    } catch (e) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'OpenAI API-nyckel saknas. Sätt OPENAI_API_KEY i .env.local.' },
         { status: 500 }
       );
     }
 
-    const systemPrompt = `You are a professional Swedish chef and meal planner specializing in turning discounted groceries into great dinners.
+    // Generate rich context for the AI
+    const recipeContext = generateRecipeContext(ingredients, difficulty);
 
-Input: A list of discounted ingredients from Hemköp (often a mix of great cooking items and some fika/snacks).
+    const systemPrompt = `Du är en erfaren svensk hemmakock som skapar praktiska, goda vardagsrecept.
 
-Task: Create 3 distinct, recipe recommendations that feel like genuinely very good ideas, could be very simple aswell.
+${SWEDISH_RECIPE_CONTEXT}
 
-**Crucial:** 
-- You may assume the user has basic pantry staples (salt, pepper, oil, flour, butter, sugar, vinegar).
-- Each recipe should be practical and use Swedish cooking methods.
-- Recipes should be distinct from each other (different cooking styles, cuisines, or meal types).
-- Make the recipes budget-friendly and suitable for everyday cooking.
-- Prefer “proper food” (protein + veg + carb) over snacks/dessert. If an ingredient is clearly fika (e.g. donuts), avoid centering a dinner on it.
+VIKTIGT:
+- Skriv ALLTID på svenska
+- Ge EXAKTA mängder (t.ex. "400g kycklingfilé", "2 dl grädde", "1 msk smör")
+- Ge EXAKTA tider (t.ex. "stek i 5 minuter", "koka i 20 minuter")
+- Ge temperaturer när relevant (t.ex. "175°C ugn", "medelhög värme")
+- Recepten ska vara REALISTISKA - sådant folk faktiskt lagar
+- Använd kampanjvarorna som huvudingredienser
 
-**Output:** Return ONLY valid JSON matching this exact schema:
+OUTPUT FORMAT - returnera EXAKT denna JSON-struktur:
 {
   "recipes": [
     {
-      "title": "Recipe Name in Swedish",
-      "ingredients": ["Ingredient 1 with quantity", "Ingredient 2 with quantity", ...],
-      "instructions": ["Step 1", "Step 2", "Step 3", ...],
-      "search_query": "Specific search query in Swedish to find similar recipes"
+      "title": "Receptnamn",
+      "description": "En mening som beskriver rätten",
+      "difficulty": "easy|medium|hard",
+      "time_minutes": 30,
+      "servings": 4,
+      "ingredients": [
+        {"item": "Kycklingfilé", "amount": "400g", "from_deal": true},
+        {"item": "Grädde", "amount": "2 dl", "from_deal": false},
+        {"item": "Salt", "amount": "1 tsk", "from_deal": false}
+      ],
+      "instructions": [
+        "Skär kycklingen i bitar och krydda med salt och peppar.",
+        "Hetta upp smör i en stekpanna på medelhög värme.",
+        "Stek kycklingen i 5-6 minuter tills den är genomstekt."
+      ],
+      "tips": "Servera med ris eller pasta.",
+      "search_query": "kycklinggryta grädde recept"
     }
   ]
-}
+}`;
 
-The search_query should be a specific, descriptive query in Swedish that would help find similar recipes on Swedish recipe sites.`;
-
-    const dealContext = Array.isArray(deals) && deals.length > 0
-      ? `\n\nSale context (from Hemköp):\n${deals.map(d => `- ${d.name} (${d.promotion || ''}${d.price ? `, ca ${d.price} kr/${d.unit || ''}` : ''}${d.category ? `, kategori: ${d.category}` : ''})`).join('\n')}`
+    const dealInfo = deals && deals.length > 0
+      ? `\n\nKAMPANJINFO:\n${deals.map(d => `- ${d.name}: ${d.promotion || `${d.price} kr`}`).join('\n')}`
       : '';
 
-    const userPrompt = `Create 3 distinct, creative recipes using these ingredients that are CURRENTLY ON SALE at Hemköp:
+    const userPrompt = `${recipeContext}${dealInfo}
 
-${ingredients.map((ing, i) => `${i + 1}. ${ing} (ON SALE - use this prominently!)`).join('\n')}
+Skapa exakt 3 olika recept. Varje recept ska:
+1. Använda minst 2 av kampanjvarorna som huvudingredienser
+2. Vara olika typer av rätter (variation!)
+3. Ha tydliga, konkreta instruktioner
+4. Markera vilka ingredienser som kommer från kampanjen (from_deal: true)
 
-Requirements:
-- These ingredients are discounted/on sale - make recipes that highlight their value
-- Each recipe should be unique (different meal types: breakfast, lunch, dinner, or different cuisines)
-- Make them practical, budget-friendly, and delicious
-- Use the sale ingredients as the main stars of each dish
-- Be creative but realistic for Swedish home cooking
-
-Make sure each recipe is distinct and uses different cooking techniques or styles.${dealContext}`;
+Returnera ENDAST giltig JSON enligt formatet ovan.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -98,22 +126,21 @@ Make sure each recipe is distinct and uses different cooking techniques or style
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
-      temperature: 0.8,
+      temperature: 0.7,
       response_format: { type: 'json_object' },
     });
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
       return NextResponse.json(
-        { error: 'No response from OpenAI' },
+        { error: 'Inget svar från AI' },
         { status: 500 }
       );
     }
 
     try {
       const parsed = JSON.parse(content);
-      
-      // Handle both formats: { recipes: [...] } or direct array
+
       let recipes: Recipe[] = [];
       if (parsed.recipes && Array.isArray(parsed.recipes)) {
         recipes = parsed.recipes;
@@ -121,7 +148,7 @@ Make sure each recipe is distinct and uses different cooking techniques or style
         recipes = parsed;
       } else {
         return NextResponse.json(
-          { error: 'Invalid response format from OpenAI' },
+          { error: 'Ogiltigt svarsformat från AI' },
           { status: 500 }
         );
       }
@@ -131,15 +158,26 @@ Make sure each recipe is distinct and uses different cooking techniques or style
         .filter((r: any) => r.title && r.ingredients && r.instructions)
         .map((r: any) => ({
           title: r.title || 'Namnlöst Recept',
-          ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+          description: r.description || '',
+          difficulty: r.difficulty || 'medium',
+          time_minutes: r.time_minutes || 30,
+          servings: r.servings || 4,
+          ingredients: Array.isArray(r.ingredients) 
+            ? r.ingredients.map((i: any) => ({
+                item: typeof i === 'string' ? i : i.item || i.name || '',
+                amount: typeof i === 'string' ? '' : i.amount || i.quantity || '',
+                from_deal: i.from_deal || false
+              }))
+            : [],
           instructions: Array.isArray(r.instructions) ? r.instructions : [],
+          tips: r.tips || null,
           search_query: r.search_query || r.title || '',
         }))
-        .slice(0, 3); // Ensure max 3 recipes
+        .slice(0, 3);
 
       if (validRecipes.length === 0) {
         return NextResponse.json(
-          { error: 'No valid recipes generated' },
+          { error: 'Inga giltiga recept genererades' },
           { status: 500 }
         );
       }
@@ -149,14 +187,14 @@ Make sure each recipe is distinct and uses different cooking techniques or style
       console.error('Error parsing OpenAI response:', parseError);
       console.error('Raw response:', content);
       return NextResponse.json(
-        { error: 'Failed to parse recipe response', details: content.substring(0, 200) },
+        { error: 'Kunde inte tolka receptsvaret', details: content.substring(0, 200) },
         { status: 500 }
       );
     }
   } catch (error) {
     console.error('Error generating recipes:', error);
     return NextResponse.json(
-      { error: 'Failed to generate recipes', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Kunde inte generera recept', details: error instanceof Error ? error.message : 'Okänt fel' },
       { status: 500 }
     );
   }
