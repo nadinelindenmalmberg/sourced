@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Deal } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-export interface Deal {
-  id: string;
-  name: string;
-  brand: string;
-  price: number;
-  unit: string;
-  promotion: string; // e.g. "2 för 30:-"
-  image: string;
-  category: string; // Used to filter out non-food later
-}
+export type { Deal };
 
 interface HemkopApiResponse {
   results: Array<{

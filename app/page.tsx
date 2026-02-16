@@ -1,434 +1,139 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Deal } from './api/deals/route';
-import DealsGrid from '../components/DealsGrid';
-import { ChefHat, Sparkles, AlertCircle } from 'lucide-react';
-import { recommendBestSelection } from './utils/randomSelection';
+import { useState, useEffect, useRef } from 'react';
+import type { DifficultyMode, GeneratedRecipe, MatchedRecipe, RecipeItem } from '@/types';
+import { useDeals, useRecipeSuggestions } from '@/hooks';
+import { getDifficultyColor, getDifficultyText } from '@/lib/recipe-utils';
+import DealsGrid from '@/components/DealsGrid';
+import {
+  ChefHat,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Users,
+  ShoppingCart,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 
-interface Recipe {
-  title: string;
-  ingredients: string[];
-  instructions: string[];
-  search_query: string;
-}
-
-interface RecipeResponse {
-  recipes: Recipe[];
+function buildAllRecipes(
+  matched: MatchedRecipe[],
+  generated: GeneratedRecipe[]
+): RecipeItem[] {
+  return [
+    ...matched.map((r) => ({ type: 'matched' as const, recipe: r })),
+    ...generated.map((r) => ({ type: 'generated' as const, recipe: r })),
+  ];
 }
 
 export default function Home() {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingDeals, setLoadingDeals] = useState(false);
-  const [storeId, setStoreId] = useState('4547');
-  const [error, setError] = useState<string | null>(null);
-  const [recommendationInfo, setRecommendationInfo] = useState<string[] | null>(null);
+  const { deals, loading: loadingDeals, error: dealsError, storeId, setStoreId, fetchDeals } = useDeals('4547');
+  const {
+    matchedRecipes,
+    generatedRecipes,
+    loading: loadingSuggestions,
+    error: suggestionsError,
+    suggestRecipes,
+    reset: resetSuggestions,
+  } = useRecipeSuggestions();
 
-  // Fetch deals on mount
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
+  const [currentRecipeIndex, setCurrentRecipeIndex] = useState(0);
+  const [showDifficultySelector, setShowDifficultySelector] = useState(false);
+  const [showRecipes, setShowRecipes] = useState(false);
+  const recipeContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     fetchDeals();
-  }, [storeId]);
-
-  const fetchDeals = async () => {
-    setLoadingDeals(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/deals?storeId=${storeId}`);
-      const data = await response.json();
-      
-      if (data.error) {
-        setError(data.error);
-        setDeals([]);
-      } else if (data.deals && data.deals.length > 0) {
-        setDeals(data.deals);
-        console.log(`✅ Loaded ${data.deals.length} deals from ${data.source || 'API'}`);
-      } else {
-        setError('Inga erbjudanden hittades');
-        setDeals([]);
-      }
-    } catch (error) {
-      console.error('Error fetching deals:', error);
-      setError('Ett fel uppstod vid hämtning av erbjudanden');
-      setDeals([]);
-    } finally {
-      setLoadingDeals(false);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleIngredient = (name: string) => {
-    setSelectedIngredients(prev => {
-      if (prev.includes(name)) {
-        return prev.filter(n => n !== name);
-      } else {
-        return [...prev, name];
-      }
-    });
+    setSelectedIngredients((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    );
   };
 
-  const handleSurpriseMe = async () => {
-    if (deals.length === 0) {
-      await fetchDeals();
-      // Wait a bit for deals to load
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (deals.length === 0) {
-        alert('Laddar erbjudanden... Försök igen om en sekund.');
-        return;
-      }
-    }
-    
-    setLoading(true);
-    setRecipes([]);
+  const handleSuggestRecipes = () => setShowDifficultySelector(true);
 
-    // Deterministic “best” recommendation (not random)
-    const rec = recommendBestSelection(deals);
-    const chosen = rec.ingredients;
-    setRecommendationInfo(rec.rationale);
-
-    if (chosen.length === 0) {
-      setLoading(false);
-      alert('Inga ingredienser hittades. Försök igen senare.');
-      return;
-    }
-    
-    console.log('⭐ Recommended ingredients:', chosen);
-    setSelectedIngredients(chosen);
-    
-    // Scroll to show selected items
-    setTimeout(() => {
-      window.scrollTo({ top: 400, behavior: 'smooth' });
-    }, 300);
-    
-    // IMPORTANT: generate with the chosen list (don’t rely on async state)
-    await generateRecipes(chosen);
+  const handleGenerateRecipes = async (mode: DifficultyMode) => {
+    setShowDifficultySelector(false);
+    setCurrentRecipeIndex(0);
+    await suggestRecipes(deals, mode);
+    setShowRecipes(true);
+    setTimeout(() => recipeContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
-  const generateRecipes = async (ingredientsOverride?: string[]) => {
-    const ingredientsToUse = ingredientsOverride ?? selectedIngredients;
-    if (ingredientsToUse.length < 2) return;
-    
-    setLoading(true);
-    setRecipes([]);
-    
-    try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ingredients: ingredientsToUse,
-          // send deal context for better recommendations
-          deals: deals
-            .filter(d => ingredientsToUse.includes(d.name))
-            .map(d => ({ name: d.name, promotion: d.promotion, price: d.price, unit: d.unit, category: d.category })),
-        }),
-      });
+  const allRecipes = buildAllRecipes(matchedRecipes, generatedRecipes);
 
-      const contentType = response.headers.get('content-type');
-      const isJson = contentType?.includes('application/json');
+  const nextRecipe = () =>
+    setCurrentRecipeIndex((prev) => (prev + 1) % allRecipes.length);
+  const prevRecipe = () =>
+    setCurrentRecipeIndex((prev) => (prev - 1 + allRecipes.length) % allRecipes.length);
 
-      let data: any = { error: 'Okänt fel' };
-      if (isJson) {
-        data = await response.json();
-      } else {
-        const text = await response.text();
-        console.error('API returned non-JSON:', response.status, text.slice(0, 200));
-        if (!response.ok) {
-          data = { error: `Servern svarade med fel (${response.status}). Kontrollera att OPENAI_API_KEY är satt.` };
-        }
-      }
-
-      if (data.error) {
-        console.error('Error generating recipes:', data.error);
-        alert(data.error || 'Kunde inte generera recept. Försök igen.');
-      } else if (data.recipes && data.recipes.length > 0) {
-        setRecipes(data.recipes);
-        // Scroll to recipes
-        setTimeout(() => {
-          const recipeElement = document.getElementById('recipes');
-          if (recipeElement) {
-            recipeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        }, 100);
-      } else {
-        alert('Inga recept kunde genereras. Försök igen.');
-      }
-    } catch (error) {
-      console.error('Error generating recipes:', error);
-      alert('Ett fel uppstod. Försök igen.');
-    } finally {
-      setLoading(false);
-    }
+  const closeRecipes = () => {
+    setShowRecipes(false);
+    resetSuggestions();
   };
+
+  const loading = loadingSuggestions;
+  const error = dealsError ?? suggestionsError;
+
+  const currentItem = allRecipes[currentRecipeIndex];
+  const isMatched = currentItem?.type === 'matched';
+  const matchedRecipe = isMatched ? currentItem.recipe : null;
+  const generatedRecipe = !isMatched && currentItem ? currentItem.recipe : null;
 
   return (
-    <main className="min-h-screen bg-background pb-32 safe-bottom">
-      <div className="max-w-7xl mx-auto px-3 py-4 sm:px-4 sm:py-6 md:p-8 safe-left safe-right">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
-            <ChefHat className="w-10 h-10 text-primary" />
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground">
-              Hemköp Chef
-            </h1>
+    <main className="min-h-screen bg-background pb-32">
+      <div className="max-w-7xl mx-auto px-3 py-4 sm:px-4 sm:py-6 md:p-8">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <ChefHat className="w-10 h-10 text-orange-500" />
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Sourced</h1>
           </div>
-          
-          {/* Surprise Me Button */}
-          <Card className="mb-4 sm:mb-6 border-2 border-primary/20 bg-card">
-            <CardContent className="pt-6">
-              <Button
-                onClick={handleSurpriseMe}
-                disabled={loading || loadingDeals}
-                size="lg"
-                className="w-full shadow-lg active:scale-95 touch-manipulation"
-              >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span className="text-sm sm:text-base">Rekommenderar &amp; genererar recept...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0" />
-                  <span className="text-sm sm:text-base text-center">⭐ Rekommendera recept</span>
-                </>
-              )}
-              </Button>
-              <p className="mt-3 text-sm text-muted-foreground text-center">
-              Vi väljer en “bäst match”-korg (protein + tillbehör) från erbjudandena och skapar 3 recept.
-            </p>
-            {deals.length > 0 && (
-              <p className="mt-1 text-xs text-muted-foreground text-center">
-                {deals.length} erbjudanden tillgängliga
-              </p>
-              )}
-            </CardContent>
-          </Card>
-          
-          {/* Store Selector - Stack on mobile */}
-          <Card className="mb-4">
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                <label htmlFor="storeId" className="text-foreground font-medium text-sm sm:text-base">
-                  Butik ID:
-                </label>
-                <div className="flex gap-2 flex-1">
-                  <Input
-                    id="storeId"
-                    type="text"
-                    inputMode="numeric"
-                    value={storeId}
-                    onChange={(e) => setStoreId(e.target.value)}
-                    onBlur={fetchDeals}
-                    className="flex-1 touch-manipulation"
-                    placeholder="4547"
-                  />
-                  <Button
-                    onClick={fetchDeals}
-                    disabled={loadingDeals}
-                    variant="secondary"
-                    className="touch-manipulation min-w-[100px]"
-                  >
-                    {loadingDeals ? 'Laddar...' : 'Uppdatera'}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <p className="text-muted-foreground">
+            Se veckans erbjudanden och få receptförslag
+          </p>
         </div>
 
-        {/* Error Message */}
+        <Card className="mb-6">
+          <CardContent className="pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <label className="text-sm text-muted-foreground whitespace-nowrap">
+                Hemköp butik-ID:
+              </label>
+              <div className="flex gap-2 flex-1">
+                <Input
+                  value={storeId}
+                  onChange={(e) => setStoreId(e.target.value)}
+                  className="flex-1 max-w-[120px]"
+                  placeholder="4547"
+                />
+                <Button variant="outline" onClick={() => fetchDeals()} disabled={loadingDeals}>
+                  {loadingDeals ? '...' : 'Byt butik'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Fel</AlertTitle>
-            <AlertDescription className="flex flex-col gap-2">
-              <span>{error}</span>
-              <Button
-                onClick={fetchDeals}
-                variant="destructive"
-                size="sm"
-                className="w-fit"
-              >
-                Försök igen
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Selected Ingredients Summary */}
-        {selectedIngredients.length > 0 && (
-          <Card className="mb-4 sm:mb-6 border-2 border-primary/20 bg-card">
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <CardTitle className="text-lg sm:text-xl">
-                  Valda Ingredienser ({selectedIngredients.length}):
-                </CardTitle>
-                {selectedIngredients.length >= 2 && (
-                  <Badge className="self-start sm:self-auto">
-                    Redo för recept!
-                  </Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {selectedIngredients.map((name, idx) => {
-                  // Check if this ingredient has a promotion
-                  const deal = deals.find(d => d.name === name);
-                  const hasPromotion = deal && deal.promotion && deal.promotion.length > 0;
-                  
-                  return (
-                    <Badge
-                      key={`${name}-${idx}`}
-                      variant={hasPromotion ? "destructive" : "default"}
-                      className="touch-manipulation text-xs sm:text-sm"
-                    >
-                      {hasPromotion && '🔥 '}
-                      <span className="break-words">{name}</span>
-                      {hasPromotion && deal && ` (${deal.promotion})`}
-                    </Badge>
-                  );
-                })}
-              </div>
-
-              {recommendationInfo && recommendationInfo.length > 0 && (
-                <Card className="mt-3 bg-muted/50 border-border">
-                  <CardContent className="pt-4">
-                    <div className="text-xs sm:text-sm font-semibold text-foreground mb-1">Varför dessa?</div>
-                    <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
-                      {recommendationInfo.slice(0, 6).map((r, i) => (
-                        <li key={i} className="break-words">{r}</li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
-
-              <Button
-                onClick={() => {
-                  setSelectedIngredients([]);
-                  setRecipes([]);
-                  setRecommendationInfo(null);
-                }}
-                variant="ghost"
-                size="sm"
-                className="mt-3 text-destructive hover:text-destructive touch-manipulation"
-              >
-                Rensa val
-              </Button>
+          <Card className="mb-6 border-red-200 bg-red-50 dark:bg-red-950">
+            <CardContent className="pt-4">
+              <p className="text-red-600 dark:text-red-400">{error}</p>
             </CardContent>
           </Card>
         )}
 
-        {/* Recipes Display */}
-        {recipes.length > 0 && (
-          <div id="recipes" className="mb-8">
-            <Card className="mb-4 sm:mb-6 border-2 border-primary/20 bg-card">
-              <CardHeader>
-                <CardTitle className="text-xl sm:text-3xl">
-                  ✨ Genererade Recept baserat på erbjudanden
-                </CardTitle>
-                <CardDescription className="text-sm sm:text-base">
-                  Här är {recipes.length} kreativa recept som använder ingredienser från kampanjer!
-                </CardDescription>
-              </CardHeader>
-            </Card>
-            <div className="space-y-4 sm:space-y-6">
-              {recipes.map((recipe, idx) => (
-                <Card key={idx} className="border-2 border-primary/20 shadow-lg">
-                  <CardHeader>
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                      <CardTitle className="text-xl sm:text-2xl break-words">{recipe.title}</CardTitle>
-                      <Badge variant="secondary" className="self-start">
-                        Recept {idx + 1}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <h4 className="text-base sm:text-lg font-semibold mb-2">Ingredienser:</h4>
-                      <ul className="list-disc list-inside space-y-1 text-sm sm:text-base text-muted-foreground">
-                        {recipe.ingredients.map((ing, i) => (
-                          <li key={i} className="break-words">{ing}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <h4 className="text-base sm:text-lg font-semibold mb-2">Instruktioner:</h4>
-                      <ol className="list-decimal list-inside space-y-2 text-sm sm:text-base text-muted-foreground">
-                        {recipe.instructions.map((step, i) => (
-                          <li key={i} className="break-words">{step}</li>
-                        ))}
-                      </ol>
-                    </div>
-
-                    <Separator />
-
-                    <div className="flex flex-col sm:flex-row flex-wrap gap-2">
-                      <Button
-                        asChild
-                        variant="default"
-                        className="touch-manipulation"
-                      >
-                        <a
-                          href={`https://www.google.com/search?q=${encodeURIComponent(recipe.search_query)}+site:ica.se+OR+site:arla.se+OR+site:koket.se+OR+site:hemkop.se`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          🔍 Hitta liknande recept på nätet
-                        </a>
-                      </Button>
-                      <Button
-                        asChild
-                        variant="secondary"
-                        className="touch-manipulation"
-                      >
-                        <a
-                          href={`https://www.ica.se/recept/sok/?q=${encodeURIComponent(recipe.search_query)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          📖 Sök på ICA.se
-                        </a>
-                      </Button>
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="touch-manipulation"
-                      >
-                        <a
-                          href={`https://www.koket.se/recept?q=${encodeURIComponent(recipe.search_query)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          🍳 Sök på Koket.se
-                        </a>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Deals Grid */}
-        <div className="mb-4">
-          <h2 className="text-2xl font-semibold mb-4 text-foreground">
-            Erbjudanden ({deals.length})
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
+            Veckans erbjudanden {deals.length > 0 && `(${deals.length})`}
           </h2>
         </div>
 
@@ -438,33 +143,366 @@ export default function Home() {
           onToggleIngredient={toggleIngredient}
           loading={loadingDeals}
         />
+
+        {showDifficultySelector && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle className="text-center">Välj svårighetsgrad</CardTitle>
+                <CardDescription className="text-center">
+                  Hur ambitiös vill du vara idag?
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button
+                  onClick={() => handleGenerateRecipes('easy')}
+                  className="w-full h-16 text-lg bg-green-500 hover:bg-green-600"
+                  disabled={loading}
+                >
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold">😌 Enkelt</span>
+                    <span className="text-xs opacity-80">Snabba, simpla recept</span>
+                  </div>
+                </Button>
+                <Button
+                  onClick={() => handleGenerateRecipes('varied')}
+                  className="w-full h-16 text-lg bg-yellow-500 hover:bg-yellow-600"
+                  disabled={loading}
+                >
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold">🍳 Lite olika</span>
+                    <span className="text-xs opacity-80">Blandade svårighetsgrader</span>
+                  </div>
+                </Button>
+                <Button
+                  onClick={() => handleGenerateRecipes('challenge')}
+                  className="w-full h-16 text-lg bg-red-500 hover:bg-red-600"
+                  disabled={loading}
+                >
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold">🔥 Utmaning</span>
+                    <span className="text-xs opacity-80">Mer avancerade rätter</span>
+                  </div>
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowDifficultySelector(false)}
+                  className="w-full"
+                >
+                  Avbryt
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {showRecipes && allRecipes.length > 0 && (
+          <div ref={recipeContainerRef} className="fixed inset-0 bg-background z-50 overflow-y-auto">
+            <div className="max-w-2xl mx-auto px-4 py-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Receptförslag</h2>
+                <Button variant="ghost" size="icon" onClick={closeRecipes}>
+                  <X className="w-6 h-6" />
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-center gap-4 mb-6">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={prevRecipe}
+                  disabled={allRecipes.length <= 1}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {currentRecipeIndex + 1} av {allRecipes.length}
+                </span>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={nextRecipe}
+                  disabled={allRecipes.length <= 1}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+              </div>
+
+              {currentItem && (
+                <Card className="border-2">
+                  {matchedRecipe ? (
+                    <>
+                      <CardHeader>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          <Badge className={getDifficultyColor(matchedRecipe.difficulty)}>
+                            {getDifficultyText(matchedRecipe.difficulty)}
+                          </Badge>
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {matchedRecipe.time_minutes} min
+                          </Badge>
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            {matchedRecipe.servings} port
+                          </Badge>
+                        </div>
+                        <CardTitle className="text-2xl">{matchedRecipe.name}</CardTitle>
+                        <CardDescription>{matchedRecipe.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="bg-green-50 dark:bg-green-950 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <ShoppingCart className="w-4 h-4 text-green-600" />
+                            <span className="font-medium text-green-700 dark:text-green-300">
+                              Från veckans erbjudanden:
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {matchedRecipe.matched_deals.map((deal, i) => (
+                              <Badge key={i} className="bg-green-600">
+                                {deal}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        {matchedRecipe.missing_ingredients.length > 0 && (
+                          <div className="bg-amber-50 dark:bg-amber-950 rounded-lg p-4">
+                            <span className="text-sm text-amber-700 dark:text-amber-300">
+                              💡 Du behöver även köpa:{' '}
+                              {matchedRecipe.missing_ingredients.join(', ')}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="font-semibold mb-3 text-lg">Ingredienser</h4>
+                          <ul className="space-y-2">
+                            {matchedRecipe.all_ingredients.map((ing, i) => (
+                              <li key={i} className="flex items-center gap-2">
+                                <span
+                                  className={`${
+                                    matchedRecipe.matched_deals.some(
+                                      (d) =>
+                                        d.toLowerCase().includes(ing.name.toLowerCase()) ||
+                                        ing.name.toLowerCase().includes(d.toLowerCase())
+                                    )
+                                      ? 'text-green-600 font-medium'
+                                      : ''
+                                  } ${ing.pantry ? 'text-muted-foreground' : ''}`}
+                                >
+                                  • {ing.amount} {ing.name}
+                                  {ing.pantry && (
+                                    <span className="text-xs ml-1">(har hemma)</span>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <Separator />
+                        <div>
+                          <h4 className="font-semibold mb-3 text-lg">Gör så här</h4>
+                          <ol className="space-y-3">
+                            {matchedRecipe.instructions.map((step, i) => (
+                              <li key={i} className="flex gap-3">
+                                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-bold">
+                                  {i + 1}
+                                </span>
+                                <span className="pt-0.5">{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                        {matchedRecipe.tips && (
+                          <>
+                            <Separator />
+                            <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-4">
+                              <p className="text-sm text-orange-700 dark:text-orange-300">
+                                💡 <strong>Tips:</strong> {matchedRecipe.tips}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                        <Separator />
+                        <div className="flex flex-wrap gap-2">
+                          <Button asChild variant="outline" size="sm">
+                            <a
+                              href={`https://www.ica.se/recept/sok/?q=${encodeURIComponent(matchedRecipe.search_query)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Hitta på ICA
+                            </a>
+                          </Button>
+                          <Button asChild variant="outline" size="sm">
+                            <a
+                              href={`https://www.koket.se/recept?q=${encodeURIComponent(matchedRecipe.search_query)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Hitta på Köket.se
+                            </a>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </>
+                  ) : generatedRecipe ? (
+                    <>
+                      <CardHeader>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            AI-genererat
+                          </Badge>
+                          {generatedRecipe.difficulty && (
+                            <Badge className={getDifficultyColor(generatedRecipe.difficulty)}>
+                              {getDifficultyText(generatedRecipe.difficulty)}
+                            </Badge>
+                          )}
+                          {generatedRecipe.time_minutes != null && (
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {generatedRecipe.time_minutes} min
+                            </Badge>
+                          )}
+                          {generatedRecipe.servings != null && (
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <Users className="w-3 h-3" />
+                              {generatedRecipe.servings} port
+                            </Badge>
+                          )}
+                        </div>
+                        <CardTitle className="text-2xl">{generatedRecipe.title}</CardTitle>
+                        {generatedRecipe.description && (
+                          <CardDescription>{generatedRecipe.description}</CardDescription>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div>
+                          <h4 className="font-semibold mb-3 text-lg">Ingredienser</h4>
+                          <ul className="space-y-2">
+                            {generatedRecipe.ingredients.map((ing, i) =>
+                              typeof ing === 'string' ? (
+                                <li key={i}>• {ing}</li>
+                              ) : (
+                                <li
+                                  key={i}
+                                  className={ing.from_deal ? 'text-green-600 font-medium' : ''}
+                                >
+                                  • {ing.amount} {ing.item}
+                                  {ing.from_deal && (
+                                    <Badge className="ml-2 text-xs bg-green-500">
+                                      På kampanj
+                                    </Badge>
+                                  )}
+                                </li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                        <Separator />
+                        <div>
+                          <h4 className="font-semibold mb-3 text-lg">Gör så här</h4>
+                          <ol className="space-y-3">
+                            {generatedRecipe.instructions.map((step, i) => (
+                              <li key={i} className="flex gap-3">
+                                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-purple-500 text-white flex items-center justify-center text-sm font-bold">
+                                  {i + 1}
+                                </span>
+                                <span className="pt-0.5">{step}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                        {generatedRecipe.tips && (
+                          <>
+                            <Separator />
+                            <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-4">
+                              <p className="text-sm text-purple-700 dark:text-purple-300">
+                                💡 <strong>Tips:</strong> {generatedRecipe.tips}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                        {generatedRecipe.search_query && (
+                          <>
+                            <Separator />
+                            <div className="flex flex-wrap gap-2">
+                              <Button asChild variant="outline" size="sm">
+                                <a
+                                  href={`https://www.ica.se/recept/sok/?q=${encodeURIComponent(generatedRecipe.search_query)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Liknande på ICA
+                                </a>
+                              </Button>
+                              <Button asChild variant="outline" size="sm">
+                                <a
+                                  href={`https://www.koket.se/recept?q=${encodeURIComponent(generatedRecipe.search_query)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Liknande på Köket.se
+                                </a>
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </>
+                  ) : null}
+                </Card>
+              )}
+
+              <div className="flex justify-center gap-2 mt-6">
+                {allRecipes.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentRecipeIndex(i)}
+                    className={`w-3 h-3 rounded-full transition-colors ${
+                      i === currentRecipeIndex ? 'bg-orange-500' : 'bg-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+            <Card className="p-8">
+              <div className="flex flex-col items-center gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" />
+                <p className="text-lg font-medium">Letar efter recept...</p>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
 
-      {/* Floating Action Button - iPhone safe area aware */}
-      <Button
-        onClick={() => generateRecipes()}
-        disabled={selectedIngredients.length < 2 || loading}
-        size="lg"
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 rounded-full shadow-xl active:scale-95 z-50 flex items-center gap-2 touch-manipulation safe-bottom"
-        style={{ 
-          marginBottom: 'max(1rem, env(safe-area-inset-bottom))',
-          marginRight: 'max(1rem, env(safe-area-inset-right))',
-        }}
-      >
-        {loading ? (
-          <>
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            <span className="text-sm sm:text-base">Genererar...</span>
-          </>
-        ) : (
-          <>
-            <ChefHat className="w-5 h-5 flex-shrink-0" />
-            <span className="text-sm sm:text-base whitespace-nowrap">
-              Skapa Recept ({selectedIngredients.length})
-            </span>
-          </>
-        )}
-      </Button>
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
+        <div className="max-w-lg mx-auto">
+          <Button
+            onClick={handleSuggestRecipes}
+            disabled={loading || loadingDeals || deals.length === 0}
+            size="lg"
+            className="w-full h-14 text-lg bg-orange-500 hover:bg-orange-600 shadow-lg"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
+                Letar...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" />
+                Föreslå recept
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
     </main>
   );
 }

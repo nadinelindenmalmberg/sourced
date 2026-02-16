@@ -1,6 +1,6 @@
 'use client';
 
-import { Deal } from '../app/api/deals/route';
+import type { Deal } from '@/types';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
