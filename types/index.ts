@@ -1,4 +1,5 @@
 export type { Deal, DealMatchInput } from './deal';
+export type { HemkopRecipe } from './hemkop-recipe';
 export type {
   Recipe,
   RecipeIngredient,

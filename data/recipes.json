@@ -185,7 +185,7 @@
       "time_minutes": 50,
       "servings": 4,
       "tags": ["husmanskost", "klassiker", "barnvänlig", "IKEA"],
-      "key_ingredients": ["köttfärs", "färs", "potatis", "grädde", "lingon"],
+      "key_ingredients": ["köttfärs", "färs", "köttbullar", "potatis", "grädde", "lingon"],
       "all_ingredients": [
         { "name": "Blandfärs (nöt/fläsk)", "amount": "500g", "required": true },
         { "name": "Potatis (mjölig sort)", "amount": "1 kg", "required": true },
@@ -537,6 +537,413 @@
       ],
       "tips": "Hemlig ingrediens: en nypa muskot i smeten. Krispigast om potatisen är ordentligt avrunnen!",
       "search_query": "raggmunk fläsk recept"
+    },
+    {
+      "id": "ugnsbakad_kyckling",
+      "name": "Ugnsbakad kyckling med potatis",
+      "description": "Saftig kyckling och krispig potatis från ugnen — enkel söndagsmiddag",
+      "difficulty": "easy",
+      "time_minutes": 60,
+      "servings": 4,
+      "tags": ["ugn", "kyckling", "potatis", "klassisk"],
+      "key_ingredients": ["kyckling", "kycklingfilé", "kycklinglår", "potatis"],
+      "all_ingredients": [
+        { "name": "Kycklingfilé eller kycklinglår", "amount": "600g", "required": true },
+        { "name": "Potatis", "amount": "800g", "required": true },
+        { "name": "Olivolja", "amount": "3 msk", "required": true, "pantry": true },
+        { "name": "Vitlök", "amount": "3 klyftor", "required": true, "pantry": true },
+        { "name": "Paprikapulver", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Timjan", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1,5 tsk", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Värm ugnen till 200°C.",
+        "Skär potatisen i klyftor och lägg i en stor ugnsform.",
+        "Pressa vitlöken och blanda med olivolja, paprikapulver, timjan, salt och peppar.",
+        "Häll hälften av kryddoljan över potatisen och blanda.",
+        "Lägg kycklingen i ugnsformen och pensla med resten av kryddoljan.",
+        "Tillaga i ugnen i 45–50 minuter tills kycklingen är genomstekt (innertemperatur 75°C).",
+        "Låt vila 5 minuter innan servering."
+      ],
+      "tips": "Tillsätt halverade körsbärstomater de sista 10 minuterna för extra smak och färg.",
+      "search_query": "ugnsbakad kyckling potatis"
+    },
+    {
+      "id": "lax_ugn_potatis",
+      "name": "Ugnsbakad lax med potatis och dillsås",
+      "description": "Klassisk lax i ugn med potatisklyftor och krämig dillsås",
+      "difficulty": "easy",
+      "time_minutes": 40,
+      "servings": 4,
+      "tags": ["fisk", "lax", "ugn", "potatis"],
+      "key_ingredients": ["lax", "laxfilé", "potatis", "grädde"],
+      "all_ingredients": [
+        { "name": "Laxfilé", "amount": "600g", "required": true },
+        { "name": "Potatis", "amount": "700g", "required": true },
+        { "name": "Matlagningsgrädde", "amount": "2 dl", "required": true },
+        { "name": "Dill", "amount": "1 knippe", "required": true },
+        { "name": "Smör", "amount": "1 msk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Vitpeppar", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Värm ugnen till 200°C.",
+        "Koka potatisen i lättsaltat vatten i 15 minuter tills den är nästan klar.",
+        "Lägg laxfilén i en ugnsform och salta och peppra.",
+        "Tillaga laxen i ugnen i 15–18 minuter tills den är genomstekt.",
+        "Koka grädden i en kastrull på medelvärme i 5 minuter tills den tjocknar något.",
+        "Hacka dillen fint och rör ner i gräddsåsen. Smaka av med salt.",
+        "Servera laxen med potatisen och dillsåsen."
+      ],
+      "tips": "Pressa lite citron över laxen precis innan servering för extra fräschhet.",
+      "search_query": "ugnsbakad lax potatis dillsås"
+    },
+    {
+      "id": "kycklingpasta_gradde",
+      "name": "Kycklingpasta med gräddsås",
+      "description": "Krämig pasta med kycklingfilé och gräddsås — snabb vardagsklassiker",
+      "difficulty": "easy",
+      "time_minutes": 30,
+      "servings": 4,
+      "tags": ["pasta", "kyckling", "grädde", "snabb"],
+      "key_ingredients": ["kyckling", "kycklingfilé", "pasta", "grädde"],
+      "all_ingredients": [
+        { "name": "Kycklingfilé", "amount": "500g", "required": true },
+        { "name": "Pasta (penne eller tagliatelle)", "amount": "400g", "required": true },
+        { "name": "Matlagningsgrädde", "amount": "3 dl", "required": true },
+        { "name": "Parmesan", "amount": "50g", "required": false },
+        { "name": "Vitlök", "amount": "2 klyftor", "required": true, "pantry": true },
+        { "name": "Olivolja", "amount": "2 msk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Koka pastan enligt förpackningen i lättsaltat vatten.",
+        "Skär kycklingfilén i 2 cm bitar.",
+        "Hetta upp olivoljan i en stor stekpanna på medelhög värme.",
+        "Stek kycklingen i 5–6 minuter tills den är genomstekt och lätt gyllene.",
+        "Pressa ner vitlöken och fräs med i 1 minut.",
+        "Häll i grädden, rör om och låt sjuda på låg värme i 5 minuter tills såsen tjocknar.",
+        "Blanda ner den kokta pastan och värm ihop i 1 minut.",
+        "Riv parmesan ovanpå och servera direkt."
+      ],
+      "tips": "Tillsätt en handfull babyspenat eller soltorkade tomater för extra smak.",
+      "search_query": "kycklingpasta gräddsås"
+    },
+    {
+      "id": "bacon_potatis_soppa",
+      "name": "Potatissoppa med bacon",
+      "description": "Mustig och värmande soppa med potatis och krispigt bacon",
+      "difficulty": "easy",
+      "time_minutes": 35,
+      "servings": 4,
+      "tags": ["soppa", "bacon", "potatis", "budget", "vinter"],
+      "key_ingredients": ["bacon", "potatis", "grädde"],
+      "all_ingredients": [
+        { "name": "Bacon", "amount": "150g", "required": true },
+        { "name": "Potatis", "amount": "800g", "required": true },
+        { "name": "Matlagningsgrädde", "amount": "1 dl", "required": true },
+        { "name": "Gul lök", "amount": "1 st", "required": true, "pantry": true },
+        { "name": "Grönsaksbuljong", "amount": "8 dl (vatten + 2 tärningar)", "required": true, "pantry": true },
+        { "name": "Smör", "amount": "1 msk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "efter smak", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Skala och tärna potatisen i 2 cm bitar. Finhacka löken.",
+        "Stek baconet i en stor kastrull tills det är krispigt. Ta ur och lägg på papper.",
+        "Smält smöret i samma kastrull och fräs löken mjuk, ca 3 minuter.",
+        "Tillsätt potatisen och buljongen. Koka upp och sjud i 15–20 minuter tills potatisen är mjuk.",
+        "Mixa soppan slät med stavmixer.",
+        "Rör ner grädden och värm upp. Smaka av med salt och peppar.",
+        "Servera med det krispiga baconet smulat ovanpå."
+      ],
+      "tips": "Toppa med lite gräslök och en klick crème fraîche för en festligare soppa.",
+      "search_query": "potatissoppa bacon"
+    },
+    {
+      "id": "omelett_skinka_ost",
+      "name": "Omelett med skinka och ost",
+      "description": "Snabb och mättande omelett — perfekt till lunch eller kvällsmat",
+      "difficulty": "easy",
+      "time_minutes": 15,
+      "servings": 2,
+      "tags": ["ägg", "snabb", "lunch", "skinka"],
+      "key_ingredients": ["ägg", "skinka", "ost", "bacon"],
+      "all_ingredients": [
+        { "name": "Ägg", "amount": "4 st", "required": true, "pantry": true },
+        { "name": "Skinka eller bacon", "amount": "100g", "required": true },
+        { "name": "Riven ost", "amount": "50g", "required": true },
+        { "name": "Mjölk", "amount": "2 msk", "required": false, "pantry": true },
+        { "name": "Smör", "amount": "1 msk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "en nypa", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "en nypa", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Vispa ihop äggen med mjölk, salt och peppar i en skål.",
+        "Skär skinkan i strimlor.",
+        "Smält smöret i en stekpanna på medelhög värme.",
+        "Häll i äggsmeten och låt den sätta sig längs kanterna, ca 1 minut.",
+        "Skuffa in ägget från kanterna mot mitten med en spatel.",
+        "Lägg skinkan på ena halvan och strö över osten.",
+        "Vik ihop omeletten och servera direkt."
+      ],
+      "tips": "Tillsätt hackad paprika eller champinjoner för en mer mättande variant.",
+      "search_query": "omelett skinka ost"
+    },
+    {
+      "id": "flaski_ugn",
+      "name": "Fläskfilé i ugn med potatisgratäng",
+      "description": "Mör fläskfilé med len potatisgratäng — en helklassiker",
+      "difficulty": "medium",
+      "time_minutes": 70,
+      "servings": 4,
+      "tags": ["ugn", "fläsk", "potatis", "gratäng", "söndag"],
+      "key_ingredients": ["fläskfilé", "fläskkotlett", "fläsk", "potatis", "grädde"],
+      "all_ingredients": [
+        { "name": "Fläskfilé eller fläskkotlett", "amount": "600g", "required": true },
+        { "name": "Potatis", "amount": "800g", "required": true },
+        { "name": "Grädde", "amount": "3 dl", "required": true },
+        { "name": "Riven ost", "amount": "100g", "required": true },
+        { "name": "Vitlök", "amount": "2 klyftor", "required": false, "pantry": true },
+        { "name": "Smör", "amount": "1 msk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1,5 tsk", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "0,5 tsk", "required": false, "pantry": true },
+        { "name": "Timjan", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Värm ugnen till 175°C.",
+        "Skala och skiva potatisen tunt, ca 3 mm.",
+        "Blanda grädden med pressad vitlök, salt, peppar och timjan.",
+        "Varva potatisskivorna i en smord ugnsform och häll gräddblandningen över.",
+        "Strö hälften av osten ovanpå och gratinera i ugnen i 40 minuter.",
+        "Salta och peppra fläskfilén. Bryn den runtom i smör på hög värme, ca 2 min.",
+        "Lägg fläsket ovanpå gratängen och strö resten av osten.",
+        "Tillaga ytterligare 20–25 minuter tills fläsket är genomstekt (innertemperatur 70°C).",
+        "Låt vila 5 minuter innan servering."
+      ],
+      "tips": "Gratängen kan förberedas dagen innan och förvaras i kylen — ta ut 30 min innan tillagning.",
+      "search_query": "fläskfilé ugn potatisgratäng"
+    },
+    {
+      "id": "quiche_lorraine",
+      "name": "Quiche Lorraine",
+      "description": "Klassisk pajrätt med bacon, ägg och grädde i krispigt pajskal",
+      "difficulty": "medium",
+      "time_minutes": 60,
+      "servings": 6,
+      "tags": ["paj", "ägg", "bacon", "grädde", "lunch"],
+      "key_ingredients": ["ägg", "bacon", "grädde", "ost"],
+      "all_ingredients": [
+        { "name": "Bacon", "amount": "150g", "required": true },
+        { "name": "Ägg", "amount": "3 st", "required": true, "pantry": true },
+        { "name": "Vispgrädde", "amount": "3 dl", "required": true },
+        { "name": "Riven ost", "amount": "100g", "required": true },
+        { "name": "Färdig pajdeg", "amount": "250g", "required": true },
+        { "name": "Gul lök", "amount": "1 st", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "0,5 tsk", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "en nypa", "required": false, "pantry": true },
+        { "name": "Muskot", "amount": "en nypa", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Värm ugnen till 200°C.",
+        "Kavla ut pajdegen och klä en pajform (24 cm). Nagga botten med en gaffel.",
+        "Förgrädda pajskalet i 10 minuter med bakpapper och torkade bönor som tyngd.",
+        "Stek baconet krispigt och löken mjuk i samma panna. Låt svalna.",
+        "Vispa ihop ägg, grädde, salt, peppar och muskot.",
+        "Fördela bacon och lök i pajskalet och strö över hälften av osten.",
+        "Häll äggblandningen över och toppa med resten av osten.",
+        "Grädda i 30–35 minuter tills fyllningen är fast och ytan gyllene."
+      ],
+      "tips": "Servera med en enkel grön sallad. Går att äta kall dagen efter — perfekt matlåda.",
+      "search_query": "quiche lorraine recept"
+    },
+    {
+      "id": "makaroner_ost",
+      "name": "Ugnsmakaroner med ost",
+      "description": "Krämig ostgratäng med makaroner — barnvänlig budgetfavorit",
+      "difficulty": "easy",
+      "time_minutes": 35,
+      "servings": 4,
+      "tags": ["pasta", "ost", "ugn", "barnvänlig", "budget"],
+      "key_ingredients": ["pasta", "makaroner", "ost", "grädde"],
+      "all_ingredients": [
+        { "name": "Makaroner eller penne", "amount": "300g", "required": true },
+        { "name": "Riven lagrad ost", "amount": "200g", "required": true },
+        { "name": "Matlagningsgrädde", "amount": "3 dl", "required": true },
+        { "name": "Mjölk", "amount": "1 dl", "required": false, "pantry": true },
+        { "name": "Smör", "amount": "1 msk", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Vitpeppar", "amount": "0,5 tsk", "required": false, "pantry": true },
+        { "name": "Muskot", "amount": "en nypa", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Värm ugnen till 200°C.",
+        "Koka makaronerna 2 minuter kortare än anvisning — de ska vara lite hårda.",
+        "Blanda grädde, mjölk, salt, peppar och muskot i en skål.",
+        "Smörj en ugnsform och lägg i makaronerna.",
+        "Häll gräddblandningen över och strö hälften av osten ovanpå.",
+        "Grädda i 20 minuter, strö resten av osten och grädda ytterligare 10 min tills bubbligt och gyllent."
+      ],
+      "tips": "Blanda ner kokt skinka eller broccoli i makaronerna för en mer mättande rätt.",
+      "search_query": "ugnsmakaroner ost"
+    },
+    {
+      "id": "kyckling_paprika_wok",
+      "name": "Kycklingwok med paprika",
+      "description": "Snabb asiatisk wok med kyckling och paprika — serveras med ris",
+      "difficulty": "easy",
+      "time_minutes": 25,
+      "servings": 4,
+      "tags": ["wok", "kyckling", "paprika", "ris", "snabb", "asiatisk"],
+      "key_ingredients": ["kyckling", "kycklingfilé", "paprika", "ris"],
+      "all_ingredients": [
+        { "name": "Kycklingfilé", "amount": "500g", "required": true },
+        { "name": "Paprika (röd och gul)", "amount": "2 st", "required": true },
+        { "name": "Jasminris", "amount": "3 dl (torrt)", "required": true },
+        { "name": "Sojasås", "amount": "3 msk", "required": true, "pantry": true },
+        { "name": "Vitlök", "amount": "2 klyftor", "required": true, "pantry": true },
+        { "name": "Rapsolja", "amount": "2 msk", "required": false, "pantry": true },
+        { "name": "Ingefära pulver", "amount": "0,5 tsk", "required": false, "pantry": true },
+        { "name": "Chilipulver", "amount": "en nypa", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Koka riset enligt förpackningen.",
+        "Skär kycklingfilén i tunna strimlor, ca 1 cm breda.",
+        "Skär paprikorna i strimlor.",
+        "Hetta upp oljan i en wok eller stor stekpanna på hög värme.",
+        "Woka kycklingen i 4–5 minuter tills den är genomstekt.",
+        "Tillsätt paprika, vitlök och ingefära, woka ytterligare 2–3 minuter.",
+        "Häll i sojan, rör om snabbt och servera direkt över riset."
+      ],
+      "tips": "Tillsätt cashewnötter eller jordnötter för extra knapr. Hoisinsås ger djupare smak.",
+      "search_query": "kycklingwok paprika ris"
+    },
+    {
+      "id": "torsk_ugn",
+      "name": "Ugnsbakad torsk med citronsås",
+      "description": "Mjäll torskfilé i ugn med smörig citronsås och kokt potatis",
+      "difficulty": "easy",
+      "time_minutes": 35,
+      "servings": 4,
+      "tags": ["fisk", "torsk", "ugn", "potatis"],
+      "key_ingredients": ["torsk", "torskfilé", "fiskfilé", "fisk", "potatis"],
+      "all_ingredients": [
+        { "name": "Torskfilé", "amount": "600g", "required": true },
+        { "name": "Potatis", "amount": "700g", "required": true },
+        { "name": "Smör", "amount": "3 msk", "required": true, "pantry": true },
+        { "name": "Dill", "amount": "en handfull", "required": false },
+        { "name": "Vitlök", "amount": "1 klyfta", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Vitpeppar", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Värm ugnen till 200°C.",
+        "Koka potatisen i lättsaltat vatten i 20 minuter.",
+        "Lägg torskfilén i en smord ugnsform. Salta och peppra.",
+        "Lägg en klick smör och pressad vitlök ovanpå fisken.",
+        "Tillaga i ugnen i 15–18 minuter tills fisken lätt flagar.",
+        "Smält resterande smör i en liten kastrull och hacka ner dillen.",
+        "Häll dillsmöret över fisken och servera med potatisen."
+      ],
+      "tips": "Fisk är klar när den lätt flagar med en gaffel — överkokad fisk blir torr och trist.",
+      "search_query": "ugnsbakad torsk citronsås"
+    },
+    {
+      "id": "biff_stekpanna",
+      "name": "Stekt biff med potatismos och gräddsås",
+      "description": "Klassisk stekt biff med len potatismos och krämig gräddsås",
+      "difficulty": "medium",
+      "time_minutes": 40,
+      "servings": 2,
+      "tags": ["nötkött", "biff", "potatis", "klassisk"],
+      "key_ingredients": ["biff", "nötkött", "entrecote", "oxfilé", "potatis"],
+      "all_ingredients": [
+        { "name": "Nötbiff eller entrecote", "amount": "300g (2 biffar)", "required": true },
+        { "name": "Potatis", "amount": "600g", "required": true },
+        { "name": "Grädde", "amount": "1,5 dl", "required": true },
+        { "name": "Smör", "amount": "3 msk", "required": true, "pantry": true },
+        { "name": "Mjölk", "amount": "0,5 dl", "required": false, "pantry": true },
+        { "name": "Kycklingbuljong", "amount": "1 dl", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Svartpeppar", "amount": "1 tsk", "required": true, "pantry": true }
+      ],
+      "instructions": [
+        "Koka potatisen i lättsaltat vatten tills mjuk, ca 20 minuter.",
+        "Ta ut biffarna ur kylen 20 minuter innan stekning.",
+        "Häll av potatisen och mosa med smör och mjölk. Smaka av med salt.",
+        "Salta och peppra biffarna generöst på båda sidor.",
+        "Hetta upp en stekpanna på hög värme. Smält 1 msk smör tills det brynt.",
+        "Stek biffarna 2–3 minuter per sida för medium. Lägg på tallrik och vila 3 min.",
+        "I samma panna: häll i buljong och grädde, låt koka ihop 3 minuter till sås.",
+        "Servera biffarna med potatismos och gräddsåsen."
+      ],
+      "tips": "Biffar ska alltid vila efter stekning — köttsaften fördelas och köttet blir saftigare.",
+      "search_query": "stekt biff potatismos gräddsås"
+    },
+    {
+      "id": "lax_pasta",
+      "name": "Laxpasta med dillsås",
+      "description": "Krämig pasta med lax och dill — snabb och lyxig vardagsrätt",
+      "difficulty": "easy",
+      "time_minutes": 25,
+      "servings": 4,
+      "tags": ["pasta", "lax", "grädde", "snabb"],
+      "key_ingredients": ["lax", "laxfilé", "pasta", "grädde"],
+      "all_ingredients": [
+        { "name": "Laxfilé", "amount": "400g", "required": true },
+        { "name": "Pasta (tagliatelle eller penne)", "amount": "400g", "required": true },
+        { "name": "Matlagningsgrädde", "amount": "3 dl", "required": true },
+        { "name": "Dill", "amount": "0,5 knippe", "required": true },
+        { "name": "Smör", "amount": "1 msk", "required": false, "pantry": true },
+        { "name": "Vitlök", "amount": "1 klyfta", "required": false, "pantry": true },
+        { "name": "Salt", "amount": "1 tsk", "required": false, "pantry": true },
+        { "name": "Vitpeppar", "amount": "0,5 tsk", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Koka pastan enligt förpackningen i lättsaltat vatten.",
+        "Skär laxfilén i 3 cm bitar och krydda med salt och peppar.",
+        "Smält smöret i en stekpanna på medelhög värme.",
+        "Stek laxen i 2–3 minuter per sida tills den är genomstekt. Lägg åt sidan.",
+        "Pressa vitlöken i samma panna och häll i grädden. Sjud i 4 minuter.",
+        "Hacka dillen och rör ner i såsen.",
+        "Blanda pastan med såsen, lägg laxen ovanpå och servera direkt."
+      ],
+      "tips": "Rökt lax fungerar utmärkt — rör ner den direkt i gräddsåsen utan stekning.",
+      "search_query": "laxpasta dillsås"
+    },
+    {
+      "id": "fardiga_kottbullar",
+      "name": "Köttbullar med potatismos och gräddsås",
+      "description": "Snabbt klassiskt med färdigköpta köttbullar — perfekt vardagsmat",
+      "difficulty": "easy",
+      "time_minutes": 25,
+      "servings": 4,
+      "tags": ["husmanskost", "snabb", "barnvänlig", "köttbullar"],
+      "key_ingredients": ["köttbullar", "delikatessköttbullar", "potatis", "grädde"],
+      "all_ingredients": [
+        { "name": "Köttbullar (färdigköpta)", "amount": "ca 600g", "required": true },
+        { "name": "Potatis (mjölig sort)", "amount": "1 kg", "required": true },
+        { "name": "Vispgrädde", "amount": "2 dl", "required": true },
+        { "name": "Mjölk", "amount": "2 dl", "required": true, "pantry": true },
+        { "name": "Smör", "amount": "3 msk", "required": true, "pantry": true },
+        { "name": "Vetemjöl", "amount": "2 msk", "required": true, "pantry": true },
+        { "name": "Köttbuljong", "amount": "2 dl", "required": true, "pantry": true },
+        { "name": "Lingonsylt", "amount": "till servering", "required": false },
+        { "name": "Salt", "amount": "efter smak", "required": false, "pantry": true },
+        { "name": "Vitpeppar", "amount": "efter smak", "required": false, "pantry": true }
+      ],
+      "instructions": [
+        "Skala och koka potatisen i saltat vatten i 20–25 minuter.",
+        "Värm köttbullarna i ugn på 175° i 12–15 min, eller stek i smör på medelvärme.",
+        "Gör mos: mosa potatisen med mjölk, 2 msk smör och salt.",
+        "Gör gräddsås: smält 1 msk smör, vispa i mjölet, späd med buljong och grädde. Koka 3–4 min.",
+        "Smaka av såsen med salt och peppar.",
+        "Servera köttbullarna med potatismos, gräddsås och lingonsylt."
+      ],
+      "tips": "Pressgurka gör middagen komplett. Strö lite persilja över moset för färg.",
+      "search_query": "köttbullar potatismos gräddsås"
     }
   ]
 }

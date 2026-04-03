@@ -1,15 +1,26 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
+import { Fredoka } from 'next/font/google'
 import './globals.css'
+import { LanguageProvider } from '@/lib/i18n-context'
+
+const fredoka = Fredoka({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-fredoka',
+})
+
+/** App Router: avoid a manual head element so Next can inject stylesheets. */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+  themeColor: '#FFFBF7',
+}
 
 export const metadata: Metadata = {
-  title: 'Sourced - Recept från veckans erbjudanden',
-  description: 'Hitta recept baserat på veckans erbjudanden från Hemköp',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-  },
+  title: 'Sourced',
+  description: 'Recipes from this week\'s Hemköp deals',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -17,20 +28,12 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="sv">
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Sourced" />
-      </head>
-      <body>{children}</body>
+      <body className={fredoka.className}>
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   )
 }

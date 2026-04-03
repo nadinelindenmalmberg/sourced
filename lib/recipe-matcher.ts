@@ -32,7 +32,7 @@ export function dealMatchesIngredient(dealName: string, ingredient: string): boo
   for (const dealWord of dealWords) {
     for (const ingredientWord of ingredientWords) {
       if (dealWord.length > 2 && ingredientWord.length > 2) {
-        if (dealWord.includes(ingredientWord) || ingredientWord.includes(dealWord)) {
+        if (dealWord.startsWith(ingredientWord) || ingredientWord.startsWith(dealWord)) {
           return true;
         }
       }
@@ -59,24 +59,28 @@ export function isPantryItem(ingredient: string): boolean {
 /**
  * Score one recipe against available deals; returns recipe with match metadata.
  */
-export function scoreRecipe(recipe: Recipe, deals: DealMatchInput[]): MatchedRecipe {
+export function scoreRecipe(recipe: Recipe, deals: DealMatchInput[]): MatchedRecipe & { key_deal_matches: number } {
   const matchedDeals: string[] = [];
   const missingIngredients: string[] = [];
   const pantryIngredients: string[] = [];
+  let keyDealMatches = 0;
 
   for (const keyIng of recipe.key_ingredients) {
+    if (isPantryItem(keyIng)) {
+      pantryIngredients.push(keyIng);
+      continue;
+    }
     const matchingDeal = deals.find((d) => dealMatchesIngredient(d.name, keyIng));
     if (matchingDeal) {
       if (!matchedDeals.includes(matchingDeal.name)) matchedDeals.push(matchingDeal.name);
-    } else if (isPantryItem(keyIng)) {
-      pantryIngredients.push(keyIng);
+      keyDealMatches++;
     } else {
       missingIngredients.push(keyIng);
     }
   }
 
   for (const ing of recipe.all_ingredients) {
-    if (ing.pantry) {
+    if (ing.pantry || isPantryItem(ing.name)) {
       if (!pantryIngredients.includes(ing.name)) pantryIngredients.push(ing.name);
       continue;
     }
@@ -86,9 +90,14 @@ export function scoreRecipe(recipe: Recipe, deals: DealMatchInput[]): MatchedRec
     }
   }
 
-  const keyMatches = matchedDeals.length;
+  // Protein boost: if any key deal match is a protein-category deal, reward it heavily
+  const matchedKeyDeals = deals.filter((d) => matchedDeals.includes(d.name) &&
+    recipe.key_ingredients.some((k) => dealMatchesIngredient(d.name, k)));
+  const proteinBonus = matchedKeyDeals.some((d) => isProteinDeal(d.name)) ? 20 : 0;
+
   const missingPenalty = missingIngredients.length * 2;
-  const score = keyMatches * 10 + matchedDeals.length - missingPenalty;
+  // Key ingredient matches are weighted heavily; secondary matches add a smaller bonus.
+  const score = keyDealMatches * 15 + matchedDeals.length * 3 - missingPenalty + proteinBonus;
 
   const totalKey = recipe.key_ingredients.length;
   const coveredKey =
@@ -105,7 +114,32 @@ export function scoreRecipe(recipe: Recipe, deals: DealMatchInput[]): MatchedRec
     missing_ingredients: missingIngredients,
     pantry_ingredients: pantryIngredients,
     match_percentage: matchPercentage,
+    key_deal_matches: keyDealMatches,
   };
+}
+
+const EXPENSIVE_PROTEINS = [
+  'kyckling', 'lax', 'fisk', 'kött', 'köttfärs', 'nöt', 'nötfärs',
+  'lamm', 'räkor', 'tonfisk', 'krabba', 'hummer', 'biff', 'entrecote',
+  'fläsk', 'anka', 'kalkon', 'hjort', 'vildsvin',
+];
+
+const PROTEIN_NAMES = [
+  'kyckling', 'lax', 'fisk', 'kött', 'köttfärs', 'nöt', 'nötfärs',
+  'lamm', 'räkor', 'tonfisk', 'krabba', 'hummer', 'biff', 'entrecote',
+  'fläsk', 'anka', 'kalkon', 'bacon', 'skinka', 'korv', 'köttbullar',
+  'lövbiff', 'kassler', 'falukorv', 'chorizo', 'torsk', 'sej', 'makrill',
+];
+
+function isProteinDeal(dealName: string): boolean {
+  const name = normalize(dealName);
+  return PROTEIN_NAMES.some((p) => name.includes(normalize(p)));
+}
+
+function isExpensiveProtein(deal: DealMatchInput): boolean {
+  const name = normalize(deal.name);
+  const price = deal.price ?? 0;
+  return price > 40 && EXPENSIVE_PROTEINS.some((p) => name.includes(normalize(p)));
 }
 
 export interface MatchRecipesOptions {
@@ -115,17 +149,32 @@ export interface MatchRecipesOptions {
 
 /**
  * Match deals against the recipe database and return top scored recipes.
+ * A recipe qualifies if it has 2+ deal matches, or 1 match that is an expensive protein (price > 40 kr).
  */
 export function matchRecipes(
   deals: DealMatchInput[],
   options: MatchRecipesOptions = {}
 ): MatchedRecipe[] {
-  const { maxResults = 5, minDealMatches = 1 } = options;
+  const { maxResults = 8 } = options;
 
   if (!deals || deals.length === 0) return [];
 
   const scored = recipes.map((recipe) => scoreRecipe(recipe, deals));
-  const withMatches = scored.filter((r) => r.matched_deals.length >= minDealMatches);
+  const withMatches = scored.filter((r) => {
+    // Must have 2+ key ingredients on sale, OR exactly 1 key ingredient that is a protein.
+    // This prevents recipes from appearing just because cheap secondary items (dill, grädde)
+    // happen to be on sale — the MAIN ingredient must drive the suggestion.
+    if (r.key_deal_matches >= 2) return true;
+    if (r.key_deal_matches === 1) {
+      const matchedKeyDeal = deals.find(
+        (d) =>
+          r.matched_deals.includes(d.name) &&
+          r.key_ingredients.some((k) => dealMatchesIngredient(d.name, k))
+      );
+      return matchedKeyDeal ? isProteinDeal(matchedKeyDeal.name) : false;
+    }
+    return false;
+  });
 
   const difficultyOrder: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
 
