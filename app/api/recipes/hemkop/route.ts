@@ -247,15 +247,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log('Fetching Hemköp recipes from receptsok...');
     const allRecipes = await fetchAllHemkopRecipes(maxTotal);
-    console.log(`Fetched ${allRecipes.length} unique Hemköp recipes.`);
 
     if (allRecipes.length === 0 && useFallback) {
       const apiKey = process.env.SPOONACULAR_API_KEY;
       if (apiKey) {
         const fallbackRecipes = await fetchSpoonacularRecipes(apiKey, maxTotal);
-        console.log(`Fallback: ${fallbackRecipes.length} recipes from Spoonacular.`);
         return NextResponse.json({
           recipes: fallbackRecipes,
           count: fallbackRecipes.length,

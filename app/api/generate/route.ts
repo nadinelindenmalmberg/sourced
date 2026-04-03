@@ -1,3 +1,14 @@
+/**
+ * POST /api/generate
+ *
+ * Generates 1–3 Swedish recipes from a list of ingredients (e.g. campaign/deal items).
+ * Uses OpenAI with a Swedish recipe context and pantry assumptions; optional
+ * difficulty and deal metadata improve relevance.
+ *
+ * Body: { ingredients: string[], difficulty?: 'easy'|'medium'|'hard'|'varied', deals?: Deal[] }
+ * Returns: { recipes: Recipe[] } or { error: string }
+ * Requires: OPENAI_API_KEY in .env.local
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { generateRecipeContext, SWEDISH_RECIPE_CONTEXT } from '@/lib/recipe-context';
@@ -49,9 +60,9 @@ export async function POST(request: NextRequest) {
     const body: RecipeRequest = await request.json();
     const { ingredients, difficulty = 'varied', deals } = body;
 
-    if (!ingredients || ingredients.length < 2) {
+    if (!ingredients || ingredients.length < 1) {
       return NextResponse.json(
-        { error: 'Minst 2 ingredienser krävs' },
+        { error: 'Minst 1 ingrediens krävs' },
         { status: 400 }
       );
     }
@@ -110,15 +121,16 @@ OUTPUT FORMAT - returnera EXAKT denna JSON-struktur:
       ? `\n\nKAMPANJINFO:\n${deals.map(d => `- ${d.name}: ${d.promotion || `${d.price} kr`}`).join('\n')}`
       : '';
 
+    const recipeCount = ingredients.length === 1 ? 2 : 3;
     const userPrompt = `${recipeContext}${dealInfo}
 
-Skapa exakt 3 olika recept. Varje recept ska:
-1. Använda minst 2 av kampanjvarorna som huvudingredienser
+Skapa ${recipeCount} olika recept. Varje recept ska:
+1. Bygga på kampanjvarorna som huvudingredienser — fyll ut med vanliga basvaror
 2. Vara olika typer av rätter (variation!)
-3. Ha tydliga, konkreta instruktioner
+3. Ha tydliga, konkreta instruktioner med exakta mängder och tider
 4. Markera vilka ingredienser som kommer från kampanjen (from_deal: true)
 
-Returnera ENDAST giltig JSON enligt formatet ovan.`;
+Returnera ENDAST giltig JSON enligt formatet ovan med nyckeln "recipes" innehållande en array med ${recipeCount} recept.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -193,8 +205,28 @@ Returnera ENDAST giltig JSON enligt formatet ovan.`;
     }
   } catch (error) {
     console.error('Error generating recipes:', error);
+    const message = error instanceof Error ? error.message : 'Okänt fel';
+
+    // Avoid leaking API keys in error details and give a clearer status to the client.
+    const lower = message.toLowerCase();
+    const isInvalidApiKey =
+      lower.includes('invalid_api_key') ||
+      lower.includes('incorrect api key') ||
+      lower.includes('authenticationerror') ||
+      lower.includes('401');
+
+    if (isInvalidApiKey) {
+      return NextResponse.json(
+        {
+          error:
+            'Ogiltig OPENAI_API_KEY. Kontrollera att nyckeln är aktiv och korrekt (platform.openai.com).',
+        },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Kunde inte generera recept', details: error instanceof Error ? error.message : 'Okänt fel' },
+      { error: 'Kunde inte generera recept', details: message },
       { status: 500 }
     );
   }

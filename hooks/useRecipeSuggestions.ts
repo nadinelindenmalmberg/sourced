@@ -50,26 +50,22 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
 
       setMatchedRecipes(recipes);
 
-      if (recipes.length < 3) {
-        const topDeals = deals
-          .filter((d) => d.promotion?.length)
-          .slice(0, 8)
-          .map((d) => d.name);
-
-        if (topDeals.length >= 2) {
-          const aiRes = await fetch('/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ingredients: topDeals,
-              difficulty: DIFFICULTY_MAP[mode],
-              deals: deals.filter((d) => topDeals.includes(d.name)),
-            }),
-          });
-          const aiData = await aiRes.json();
-          if (aiData.recipes?.length) {
-            setGeneratedRecipes(aiData.recipes);
-          }
+      // Call AI to supplement if we have fewer than 2 matched recipes.
+      // Use all passed deals (not just promoted ones — deals without promotion text are still valid).
+      if (recipes.length < 2 && deals.length >= 1) {
+        const topDeals = deals.slice(0, 10);
+        const aiRes = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ingredients: topDeals.map((d) => d.name),
+            difficulty: DIFFICULTY_MAP[mode],
+            deals: topDeals,
+          }),
+        });
+        const aiData = await aiRes.json();
+        if (aiData.recipes?.length) {
+          setGeneratedRecipes(aiData.recipes);
         }
       }
     } catch (err) {

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const recipes = matchRecipes(deals, { maxResults: 5, minDealMatches: 1 });
+    const recipes = matchRecipes(deals, { maxResults: 8 });
 
     return NextResponse.json({
       recipes,

@@ -1,3 +1,14 @@
+/**
+ * GET /api/deals
+ *
+ * Fetches current campaign/deal products from Hemköp for a given store.
+ * Paginates the campaigns API and maps results to a unified Deal shape
+ * (id, name, brand, price, unit, promotion, image, category).
+ *
+ * Query: ?storeId=4547 (optional, default 4547)
+ * Returns: { deals: Deal[], count: number, storeId: string, source: 'hemkop_api' }
+ *          or { error, deals: [], count: 0 } on failure.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import type { Deal } from '@/types';
 
@@ -22,10 +33,12 @@ interface HemkopApiResponse {
     originalImage?: {
       url?: string;
     };
+    comparePrice?: string;
     potentialPromotions?: Array<{
       textLabel?: string;
       rewardLabel?: string;
       cartLabel?: string;
+      comparePrice?: string;
       price?: number;
     }>;
     googleAnalyticsCategory?: string;
@@ -41,8 +54,6 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const storeId = searchParams.get('storeId') || '4547';
     
-    console.log(`Fetching deals for store ${storeId}...`);
-    
     const allDeals: Deal[] = [];
     let page = 0;
     let hasMorePages = true;
@@ -50,8 +61,6 @@ export async function GET(request: NextRequest) {
     while (hasMorePages) {
       try {
         const url = `https://www.hemkop.se/search/campaigns/offline?q=${storeId}&type=PERSONAL_GENERAL&page=${page}&size=30&disableMimerSort=true`;
-        
-        console.log(`Fetching page ${page}...`);
         
         const response = await fetch(url, {
           headers: {
@@ -70,21 +79,16 @@ export async function GET(request: NextRequest) {
           // For other errors, try next page or break
           page++;
           if (page > 10) {
-            console.log('Reached max page limit, stopping');
             break;
           }
           continue;
         }
         
         const rawData: any = await response.json();
-        console.log(`Page ${page} raw response keys:`, Object.keys(rawData));
-        console.log(`Page ${page} raw response sample:`, JSON.stringify(rawData).substring(0, 500));
-        
         // Handle different response structures
         const results = rawData.results || rawData.items || rawData.data || (Array.isArray(rawData) ? rawData : []);
         
         if (!results || results.length === 0) {
-          console.log(`No more results at page ${page}, stopping pagination`);
           hasMorePages = false;
           break;
         }
@@ -103,11 +107,15 @@ export async function GET(request: NextRequest) {
             // Extract unit from priceUnit (e.g. "kr/st" -> "st")
             const unit = item.priceUnit ? item.priceUnit.split('/').pop() || 'st' : 'st';
             
-            // Get promotion text from potentialPromotions
+            // Get promotion text and compare price from potentialPromotions
             let promotion = '';
+            let comparePrice: string | undefined;
             if (item.potentialPromotions && item.potentialPromotions.length > 0) {
               const promo = item.potentialPromotions[0];
               promotion = promo.cartLabel || promo.rewardLabel || promo.textLabel || '';
+              comparePrice = promo.comparePrice || item.comparePrice || undefined;
+            } else {
+              comparePrice = item.comparePrice || undefined;
             }
             
             // Get image URL (prefer original, then regular, then thumbnail)
@@ -126,12 +134,12 @@ export async function GET(request: NextRequest) {
               promotion: promotion,
               image: imageUrl,
               category: category,
+              comparePrice,
             };
           });
         
         allDeals.push(...pageDeals);
-        console.log(`Page ${page}: Found ${pageDeals.length} deals (Total: ${allDeals.length})`);
-        
+
         // If we got fewer than the page size, we're probably at the end
         if (pageDeals.length < 30) {
           hasMorePages = false;
@@ -139,7 +147,6 @@ export async function GET(request: NextRequest) {
           page++;
           // Safety limit
           if (page > 50) {
-            console.log('Reached safety limit of 50 pages, stopping');
             hasMorePages = false;
           }
         }
@@ -158,8 +165,6 @@ export async function GET(request: NextRequest) {
         break;
       }
     }
-    
-    console.log(`✅ Successfully fetched ${allDeals.length} total deals for store ${storeId}`);
     
     return NextResponse.json({
       deals: allDeals,

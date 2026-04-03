@@ -31,8 +31,7 @@
         "olja",
         "olivolja",
         "rapsolja",
-        "matolja",
-        "kokosolja"
+        "matolja"
       ]
     },
     "bas_torrvaror": {
@@ -41,7 +40,6 @@
         "mjöl",
         "vetemjöl",
         "ströbröd",
-        "rågmjöl",
         "maizena",
         "bakpulver",
         "bikarbonat",
@@ -50,6 +48,25 @@
         "florsocker",
         "vaniljsocker",
         "sirap"
+      ]
+    },
+    "kolhydrater": {
+      "name": "Baskolhydrater (alltid billiga, driver inte receptval)",
+      "items": [
+        "potatis",
+        "pasta",
+        "makaroner",
+        "penne",
+        "spaghetti",
+        "tagliatelle",
+        "fettuccine",
+        "rigatoni",
+        "fusilli",
+        "ris",
+        "jasminris",
+        "basmati",
+        "basmatiris",
+        "nudlar"
       ]
     },
     "saser_smaksattare": {
@@ -90,7 +107,9 @@
       "items": [
         "lök",
         "vitlök",
-        "gul lök"
+        "gul lök",
+        "citron",
+        "lime"
       ]
     },
     "konserver": {
@@ -114,7 +133,9 @@
     "vinäger", "ättika", "balsamvinäger", "tomatpuré", "worcestershiresås",
     "tabasco", "sambal oelek", "fish sauce", "oyster sauce",
     "kycklingbuljong", "grönsaksbuljong", "köttbuljong", "fiskbuljong", "fond",
-    "mjölk", "ägg", "lök", "vitlök", "gul lök",
-    "krossade tomater", "kokosmjölk", "majs", "bönor"
+    "mjölk", "ägg", "lök", "vitlök", "gul lök", "citron", "lime",
+    "krossade tomater", "kokosmjölk", "majs", "bönor",
+    "potatis", "pasta", "makaroner", "penne", "spaghetti", "tagliatelle",
+    "fettuccine", "rigatoni", "fusilli", "ris", "jasminris", "basmati", "basmatiris", "nudlar"
   ]
 }

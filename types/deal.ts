@@ -10,6 +10,7 @@ export interface Deal {
   promotion: string;
   image: string;
   category: string;
+  comparePrice?: string;
 }
 
 /**
