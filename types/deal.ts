@@ -8,6 +8,7 @@ export interface Deal {
   price: number;
   unit: string;
   promotion: string;
+  rewardLabel?: string;
   image: string;
   category: string;
   comparePrice?: string;

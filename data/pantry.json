@@ -122,6 +122,15 @@
       ]
     }
   },
+  "display_items": [
+    "Salt", "Peppar", "Smör", "Olja", "Olivolja",
+    "Mjöl", "Socker", "Bakpulver",
+    "Soja", "Ketchup", "Senap", "Tomatpuré",
+    "Kycklingbuljong", "Grönsaksbuljong",
+    "Mjölk", "Ägg",
+    "Lök", "Vitlök",
+    "Pasta", "Ris", "Potatis"
+  ],
   "all_items_flat": [
     "salt", "peppar", "vitpeppar", "svartpeppar", "paprikapulver", "curry",
     "timjan", "oregano", "basilika", "rosmarin", "lagerblad", "kanel",
