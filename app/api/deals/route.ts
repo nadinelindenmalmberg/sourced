@@ -107,12 +107,13 @@ export async function GET(request: NextRequest) {
             // Extract unit from priceUnit (e.g. "kr/st" -> "st")
             const unit = item.priceUnit ? item.priceUnit.split('/').pop() || 'st' : 'st';
             
-            // Get promotion text and compare price from potentialPromotions
             let promotion = '';
+            let rewardLabel: string | undefined;
             let comparePrice: string | undefined;
             if (item.potentialPromotions && item.potentialPromotions.length > 0) {
               const promo = item.potentialPromotions[0];
-              promotion = promo.cartLabel || promo.rewardLabel || promo.textLabel || '';
+              promotion = promo.cartLabel || promo.textLabel || '';
+              rewardLabel = promo.rewardLabel || undefined;
               comparePrice = promo.comparePrice || item.comparePrice || undefined;
             } else {
               comparePrice = item.comparePrice || undefined;
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
               price: price,
               unit: unit,
               promotion: promotion,
+              rewardLabel,
               image: imageUrl,
               category: category,
               comparePrice,

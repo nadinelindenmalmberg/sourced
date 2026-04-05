@@ -20,8 +20,9 @@ export function normalize(str: string): string {
  * Check if a deal name matches an ingredient (fuzzy).
  */
 export function dealMatchesIngredient(dealName: string, ingredient: string): boolean {
-  const normalizedDeal = normalize(dealName);
-  const normalizedIngredient = normalize(ingredient);
+  // Strip parentheticals before matching (e.g. "köttbullar (färdigköpta)" → "köttbullar")
+  const normalizedDeal = normalize(dealName).replace(/\(.*?\)/g, '').trim();
+  const normalizedIngredient = normalize(ingredient).replace(/\(.*?\)/g, '').trim();
 
   if (normalizedDeal.includes(normalizedIngredient)) return true;
   if (normalizedIngredient.includes(normalizedDeal)) return true;
@@ -32,7 +33,8 @@ export function dealMatchesIngredient(dealName: string, ingredient: string): boo
   for (const dealWord of dealWords) {
     for (const ingredientWord of ingredientWords) {
       if (dealWord.length > 2 && ingredientWord.length > 2) {
-        if (dealWord.startsWith(ingredientWord) || ingredientWord.startsWith(dealWord)) {
+        if (dealWord.startsWith(ingredientWord) || ingredientWord.startsWith(dealWord) ||
+            dealWord.endsWith(ingredientWord) || ingredientWord.endsWith(dealWord)) {
           return true;
         }
       }

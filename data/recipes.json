@@ -10,7 +10,7 @@
       "time_minutes": 25,
       "servings": 4,
       "tags": ["husmanskost", "snabb", "barnvänlig", "budget"],
-      "key_ingredients": ["falukorv", "korv", "grädde", "tomatpuré", "ris"],
+      "key_ingredients": ["falukorv", "grädde", "tomatpuré", "ris"],
       "all_ingredients": [
         { "name": "Falukorv", "amount": "400g", "required": true },
         { "name": "Matlagningsgrädde", "amount": "2 dl", "required": true },
