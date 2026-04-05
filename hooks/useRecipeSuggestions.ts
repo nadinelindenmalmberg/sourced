@@ -13,6 +13,7 @@ export interface UseRecipeSuggestionsResult {
   matchedRecipes: MatchedRecipe[];
   generatedRecipes: GeneratedRecipe[];
   loading: boolean;
+  loadingAI: boolean;
   error: string | null;
   suggestRecipes: (deals: Deal[], mode: DifficultyMode) => Promise<void>;
   reset: () => void;
@@ -22,13 +23,17 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
   const [matchedRecipes, setMatchedRecipes] = useState<MatchedRecipe[]>([]);
   const [generatedRecipes, setGeneratedRecipes] = useState<GeneratedRecipe[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAI, setLoadingAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const suggestRecipes = useCallback(async (deals: Deal[], mode: DifficultyMode) => {
     setLoading(true);
+    setLoadingAI(false);
     setError(null);
     setMatchedRecipes([]);
     setGeneratedRecipes([]);
+
+    let matchedCount = 0;
 
     try {
       const matchRes = await fetch('/api/match', {
@@ -49,10 +54,21 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
       }
 
       setMatchedRecipes(recipes);
+      matchedCount = recipes.length;
+    } catch (err) {
+      console.error('Error matching recipes:', err);
+      setError('Kunde inte hämta recept');
+      setLoading(false);
+      return;
+    }
 
-      // Call AI to supplement if we have fewer than 2 matched recipes.
-      // Use all passed deals (not just promoted ones — deals without promotion text are still valid).
-      if (recipes.length < 2 && deals.length >= 1) {
+    // Phase 1 done — show matched results immediately
+    setLoading(false);
+
+    // Phase 2 — AI generation in background, only if needed
+    if (matchedCount < 2 && deals.length >= 1) {
+      setLoadingAI(true);
+      try {
         const topDeals = deals.slice(0, 10);
         const aiRes = await fetch('/api/generate', {
           method: 'POST',
@@ -67,12 +83,12 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
         if (aiData.recipes?.length) {
           setGeneratedRecipes(aiData.recipes);
         }
+      } catch (err) {
+        console.error('Error generating AI recipes:', err);
+        // AI failure is non-critical — matched results are already shown
+      } finally {
+        setLoadingAI(false);
       }
-    } catch (err) {
-      console.error('Error suggesting recipes:', err);
-      setError('Kunde inte hämta recept');
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -80,12 +96,14 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
     setMatchedRecipes([]);
     setGeneratedRecipes([]);
     setError(null);
+    setLoadingAI(false);
   }, []);
 
   return {
     matchedRecipes,
     generatedRecipes,
     loading,
+    loadingAI,
     error,
     suggestRecipes,
     reset,

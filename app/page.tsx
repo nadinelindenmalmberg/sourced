@@ -35,6 +35,7 @@ export default function Home() {
     matchedRecipes,
     generatedRecipes,
     loading: loadingSuggestions,
+    loadingAI,
     error: suggestionsError,
     suggestRecipes,
     reset: resetSuggestions,
@@ -89,15 +90,15 @@ export default function Home() {
 
   const handleSuggestRecipes = () => setShowDifficultySelector(true);
 
-  const handleGenerateRecipes = async (mode: DifficultyMode) => {
+  const handleGenerateRecipes = (mode: DifficultyMode) => {
     setShowDifficultySelector(false);
     setCurrentRecipeIndex(0);
     const dealsToUse = selectedIngredients.length > 0
       ? deals.filter((d) => selectedIngredients.includes(d.name))
       : deals;
-    await suggestRecipes(dealsToUse, mode);
     setShowRecipes(true);
     setTimeout(() => recipeContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    suggestRecipes(dealsToUse, mode); // fire without await — overlay opens immediately
   };
 
   const allRecipes = buildAllRecipes(matchedRecipes, generatedRecipes);
@@ -109,7 +110,7 @@ export default function Home() {
     resetSuggestions();
   };
 
-  const loading = loadingSuggestions;
+  const loading = loadingSuggestions || loadingAI;
   const error = dealsError ?? suggestionsError;
   const currentItem = allRecipes[currentRecipeIndex];
 
@@ -394,7 +395,7 @@ export default function Home() {
       )}
 
       {/* Recipe overlay */}
-      {showRecipes && allRecipes.length > 0 && (
+      {showRecipes && (loadingSuggestions || loadingAI || allRecipes.length > 0) && (
         <div ref={recipeContainerRef} className="fixed inset-0 bg-white z-50 overflow-y-auto">
           {/* Overlay nav bar */}
           <div className="sticky top-0 z-10 backdrop-blur-md bg-white/80 border-b border-gray-100/80">
@@ -409,6 +410,29 @@ export default function Home() {
             </div>
           </div>
           <div className="max-w-2xl mx-auto px-4 py-6">
+
+            {/* Phase 1: matching */}
+            {loadingSuggestions && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <div className="w-8 h-8 rounded-full border-2 border-gray-200 border-t-coral animate-spin" />
+                <p className="text-sm text-gray-400">{t('findingRecipes')}</p>
+              </div>
+            )}
+
+            {/* Phase 2: AI generating in background */}
+            {!loadingSuggestions && loadingAI && allRecipes.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <div className="w-8 h-8 rounded-full border-2 border-purple-200 border-t-purple-500 animate-spin" />
+                <p className="text-sm text-gray-400">{t('aiGenerating')}</p>
+              </div>
+            )}
+
+            {!loadingSuggestions && loadingAI && allRecipes.length > 0 && (
+              <div className="flex items-center gap-2 mb-4 px-1">
+                <div className="w-3.5 h-3.5 rounded-full border border-purple-300 border-t-purple-500 animate-spin flex-shrink-0" />
+                <p className="text-xs text-purple-500">{t('aiGenerating')}</p>
+              </div>
+            )}
 
             {allRecipes.length > 1 && (
               <div className="flex items-center justify-center gap-4 mb-6">
@@ -450,15 +474,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Loading overlay */}
-      {loading && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white/95 rounded-3xl px-8 py-6 flex flex-col items-center gap-4 shadow-2xl animate-fade-in-up">
-            <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-coral/20 border-t-coral" />
-            <p className="text-sm font-bold text-gray-700">{t('findingRecipes')}</p>
-          </div>
-        </div>
-      )}
 
       {/* Fixed bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-14 bg-gradient-to-t from-white via-white/95 to-transparent pointer-events-none z-30">

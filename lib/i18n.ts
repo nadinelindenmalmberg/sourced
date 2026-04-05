@@ -49,6 +49,7 @@ export const translations = {
     pantryTitle: 'Ditt skafferi',
     pantryDesc: 'Avmarkera varor du inte har hemma just nu',
     done: 'Klar',
+    aiGenerating: 'AI genererar recept...',
   },
   en: {
     appSubtitle: 'Recipes from this week\'s deals',
@@ -98,6 +99,7 @@ export const translations = {
     pantryTitle: 'Your pantry',
     pantryDesc: 'Uncheck items you are currently out of',
     done: 'Done',
+    aiGenerating: 'AI is generating recipes...',
   },
 } satisfies Record<Lang, Record<string, string>>;
 
