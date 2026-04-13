@@ -13,6 +13,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Deal } from '@/types';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
+  Pragma: 'no-cache',
+};
 
 export type { Deal };
 
@@ -63,6 +69,8 @@ export async function GET(request: NextRequest) {
         const url = `https://www.hemkop.se/search/campaigns/offline?q=${storeId}&type=PERSONAL_GENERAL&page=${page}&size=30&disableMimerSort=true`;
         
         const response = await fetch(url, {
+          cache: 'no-store',
+          next: { revalidate: 0 },
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json',
@@ -168,13 +176,15 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    return NextResponse.json({
-      deals: allDeals,
-      count: allDeals.length,
-      storeId,
-      source: 'hemkop_api',
-    });
-    
+    return NextResponse.json(
+      {
+        deals: allDeals,
+        count: allDeals.length,
+        storeId,
+        source: 'hemkop_api',
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching deals:', error);
     return NextResponse.json(
@@ -184,7 +194,7 @@ export async function GET(request: NextRequest) {
         deals: [],
         count: 0,
       },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
 }

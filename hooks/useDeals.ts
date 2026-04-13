@@ -23,7 +23,9 @@ export function useDeals(initialStoreId = '4547'): UseDealsResult {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/deals?storeId=${id}`);
+      const response = await fetch(`/api/deals?storeId=${id}`, {
+        cache: 'no-store',
+      });
       const data = await response.json();
 
       if (data.error) {
