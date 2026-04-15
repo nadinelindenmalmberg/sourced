@@ -51,6 +51,7 @@ export default function Home() {
   const [overriddenPantry, setOverriddenPantry] = useState<string[]>([]);
   const [userHasItems, setUserHasItems] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [storeName, setStoreName] = useState<string>('');
   const [storeAddress, setStoreAddress] = useState<string>('');
   const [storeInputValue, setStoreInputValue] = useState('');
@@ -101,14 +102,26 @@ export default function Home() {
     suggestRecipes(dealsToUse, mode); // fire without await — overlay opens immediately
   };
 
-  const allRecipes = buildAllRecipes(matchedRecipes, generatedRecipes);
+  const filteredMatched = selectedTags.length > 0
+    ? matchedRecipes.filter((r) => selectedTags.every((tag) => r.tags?.includes(tag)))
+    : matchedRecipes;
+  const allRecipes = buildAllRecipes(filteredMatched, generatedRecipes);
   const nextRecipe = () => setCurrentRecipeIndex((prev) => (prev + 1) % allRecipes.length);
   const prevRecipe = () => setCurrentRecipeIndex((prev) => (prev - 1 + allRecipes.length) % allRecipes.length);
 
   const closeRecipes = () => {
     setShowRecipes(false);
+    setSelectedTags([]);
     resetSuggestions();
   };
+
+  // Dietary tag filtering — only applies to matched recipes (generated have no tags)
+  const SHOWN_TAGS = ['vegetariskt', 'snabb', 'budget', 'barnvänlig', 'nyttigt', 'helg', 'fredagsmys'];
+  const availableTags = SHOWN_TAGS.filter((tag) =>
+    matchedRecipes.some((r) => r.tags?.includes(tag))
+  );
+  const toggleTag = (tag: string) =>
+    setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
 
   const loading = loadingSuggestions || loadingAI;
   const error = dealsError ?? suggestionsError;
@@ -410,6 +423,38 @@ export default function Home() {
             </div>
           </div>
           <div className="max-w-2xl mx-auto px-4 py-6">
+
+            {/* Dietary tag filters */}
+            {availableTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-5">
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => { toggleTag(tag); setCurrentRecipeIndex(0); }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                      selectedTags.includes(tag)
+                        ? 'bg-sage text-white'
+                        : 'border border-sage/40 bg-sage-light text-gray-700 hover:border-sage'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {selectedTags.length > 0 && (
+                  <button
+                    onClick={() => { setSelectedTags([]); setCurrentRecipeIndex(0); }}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-all"
+                  >
+                    {t('clearFilters')}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* No results after tag filtering */}
+            {!loadingSuggestions && selectedTags.length > 0 && filteredMatched.length === 0 && generatedRecipes.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">{t('noRecipesForTags')}</p>
+            )}
 
             {/* Phase 1: matching */}
             {loadingSuggestions && (

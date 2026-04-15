@@ -65,7 +65,7 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
     // Phase 1 done — show matched results immediately
     setLoading(false);
 
-    // Phase 2 — AI generation in background, only if needed
+    // Phase 2 — AI generation, only if needed, streams recipes one by one
     if (matchedCount < 2 && deals.length >= 1) {
       setLoadingAI(true);
       try {
@@ -79,9 +79,51 @@ export function useRecipeSuggestions(): UseRecipeSuggestionsResult {
             deals: topDeals,
           }),
         });
-        const aiData = await aiRes.json();
-        if (aiData.recipes?.length) {
-          setGeneratedRecipes(aiData.recipes);
+
+        const contentType = aiRes.headers.get('Content-Type') ?? '';
+
+        if (aiRes.ok && contentType.includes('ndjson')) {
+          // Stream: append each recipe as it arrives
+          const reader = aiRes.body?.getReader();
+          const decoder = new TextDecoder();
+          let remainder = '';
+
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              remainder += decoder.decode(value, { stream: true });
+              const lines = remainder.split('\n');
+              remainder = lines.pop() ?? '';
+
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (parsed.title) {
+                    setGeneratedRecipes((prev) => [...prev, parsed as GeneratedRecipe]);
+                  }
+                } catch { /* partial or malformed line */ }
+              }
+            }
+            // Flush remainder
+            if (remainder.trim()) {
+              try {
+                const parsed = JSON.parse(remainder.trim());
+                if (parsed.title) {
+                  setGeneratedRecipes((prev) => [...prev, parsed as GeneratedRecipe]);
+                }
+              } catch { /* ignore */ }
+            }
+          }
+        } else {
+          // Fallback: parse as regular JSON
+          const aiData = await aiRes.json().catch(() => ({}));
+          if (aiData.recipes?.length) {
+            setGeneratedRecipes(aiData.recipes);
+          }
         }
       } catch (err) {
         console.error('Error generating AI recipes:', err);

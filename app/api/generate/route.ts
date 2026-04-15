@@ -2,14 +2,13 @@
  * POST /api/generate
  *
  * Generates 1–3 Swedish recipes from a list of ingredients (e.g. campaign/deal items).
- * Uses OpenAI with a Swedish recipe context and pantry assumptions; optional
- * difficulty and deal metadata improve relevance.
+ * Streams recipes one-by-one as newline-delimited JSON (NDJSON) using OpenAI streaming.
  *
  * Body: { ingredients: string[], difficulty?: 'easy'|'medium'|'hard'|'varied', deals?: Deal[] }
- * Returns: { recipes: Recipe[] } or { error: string }
+ * Returns: NDJSON stream — one Recipe JSON object per line
  * Requires: OPENAI_API_KEY in .env.local
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { generateRecipeContext, SWEDISH_RECIPE_CONTEXT } from '@/lib/recipe-context';
 
@@ -17,9 +16,7 @@ export const dynamic = 'force-dynamic';
 
 function getOpenAI(): OpenAI {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    throw new Error('OPENAI API key not configured');
-  }
+  if (!key) throw new Error('OPENAI API key not configured');
   return new OpenAI({ apiKey: key });
 }
 
@@ -41,46 +38,95 @@ export interface Recipe {
   difficulty: 'easy' | 'medium' | 'hard';
   time_minutes: number;
   servings: number;
-  ingredients: Array<{
-    item: string;
-    amount: string;
-    from_deal?: boolean;
-  }>;
+  ingredients: Array<{ item: string; amount: string; from_deal?: boolean }>;
   instructions: string[];
   tips?: string;
   search_query: string;
 }
 
-export interface RecipeResponse {
-  recipes: Recipe[];
+function normalizeRecipe(r: any): Recipe | null {
+  if (!r?.title || !r?.ingredients || !r?.instructions) return null;
+  return {
+    title: r.title,
+    description: r.description || '',
+    difficulty: r.difficulty || 'medium',
+    time_minutes: r.time_minutes || 30,
+    servings: r.servings || 4,
+    ingredients: Array.isArray(r.ingredients)
+      ? r.ingredients.map((i: any) => ({
+          item: typeof i === 'string' ? i : i.item || i.name || '',
+          amount: typeof i === 'string' ? '' : i.amount || i.quantity || '',
+          from_deal: i.from_deal || false,
+        }))
+      : [],
+    instructions: Array.isArray(r.instructions) ? r.instructions : [],
+    tips: r.tips || null,
+    search_query: r.search_query || r.title || '',
+  };
+}
+
+/** Find the end index of the next complete JSON object starting at or after `from` in `text`. */
+function findCompleteObject(
+  text: string,
+  from: number
+): { json: string; end: number } | null {
+  let i = from;
+  while (i < text.length && text[i] !== '{') i++;
+  if (i >= text.length) return null;
+
+  const start = i;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (inString) {
+      if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return { json: text.slice(start, i + 1), end: i + 1 };
+    }
+  }
+  return null; // object not yet complete
 }
 
 export async function POST(request: NextRequest) {
+  const encoder = new TextEncoder();
+
+  const emitError = (msg: string, status = 500) =>
+    new Response(JSON.stringify({ error: msg }) + '\n', {
+      status,
+      headers: { 'Content-Type': 'application/x-ndjson' },
+    });
+
+  let body: RecipeRequest;
   try {
-    const body: RecipeRequest = await request.json();
-    const { ingredients, difficulty = 'varied', deals } = body;
+    body = await request.json();
+  } catch {
+    return emitError('Invalid request body', 400);
+  }
 
-    if (!ingredients || ingredients.length < 1) {
-      return NextResponse.json(
-        { error: 'Minst 1 ingrediens krävs' },
-        { status: 400 }
-      );
-    }
+  const { ingredients, difficulty = 'varied', deals } = body;
+  if (!ingredients || ingredients.length < 1) return emitError('Minst 1 ingrediens krävs', 400);
 
-    let openai: OpenAI;
-    try {
-      openai = getOpenAI();
-    } catch (e) {
-      return NextResponse.json(
-        { error: 'OpenAI API-nyckel saknas. Sätt OPENAI_API_KEY i .env.local.' },
-        { status: 500 }
-      );
-    }
+  let openai: OpenAI;
+  try {
+    openai = getOpenAI();
+  } catch {
+    return emitError('OpenAI API-nyckel saknas. Sätt OPENAI_API_KEY i .env.local.', 500);
+  }
 
-    // Generate rich context for the AI
-    const recipeContext = generateRecipeContext(ingredients, difficulty);
+  const recipeContext = generateRecipeContext(ingredients, difficulty);
+  const recipeCount = ingredients.length === 1 ? 2 : 3;
 
-    const systemPrompt = `Du är en erfaren svensk hemmakock som skapar praktiska, goda vardagsrecept.
+  const systemPrompt = `Du är en erfaren svensk hemmakock som skapar praktiska, goda vardagsrecept.
 
 ${SWEDISH_RECIPE_CONTEXT}
 
@@ -117,12 +163,12 @@ OUTPUT FORMAT - returnera EXAKT denna JSON-struktur:
   ]
 }`;
 
-    const dealInfo = deals && deals.length > 0
-      ? `\n\nKAMPANJINFO:\n${deals.map(d => `- ${d.name}: ${d.promotion || `${d.price} kr`}`).join('\n')}`
+  const dealInfo =
+    deals && deals.length > 0
+      ? `\n\nKAMPANJINFO:\n${deals.map((d) => `- ${d.name}: ${d.promotion || `${d.price} kr`}`).join('\n')}`
       : '';
 
-    const recipeCount = ingredients.length === 1 ? 2 : 3;
-    const userPrompt = `${recipeContext}${dealInfo}
+  const userPrompt = `${recipeContext}${dealInfo}
 
 Skapa ${recipeCount} olika recept. Varje recept ska:
 1. Bygga på kampanjvarorna som huvudingredienser — fyll ut med vanliga basvaror
@@ -132,102 +178,79 @@ Skapa ${recipeCount} olika recept. Varje recept ska:
 
 Returnera ENDAST giltig JSON enligt formatet ovan med nyckeln "recipes" innehållande en array med ${recipeCount} recept.`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    });
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const openaiStream = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.7,
+          stream: true,
+        });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      return NextResponse.json(
-        { error: 'Inget svar från AI' },
-        { status: 500 }
-      );
-    }
+        let buffer = '';
+        let recipesArrayStart = -1;
+        let searchFrom = 0;
+        let extractedCount = 0;
 
-    try {
-      const parsed = JSON.parse(content);
+        for await (const chunk of openaiStream) {
+          buffer += chunk.choices[0]?.delta?.content ?? '';
 
-      let recipes: Recipe[] = [];
-      if (parsed.recipes && Array.isArray(parsed.recipes)) {
-        recipes = parsed.recipes;
-      } else if (Array.isArray(parsed)) {
-        recipes = parsed;
-      } else {
-        return NextResponse.json(
-          { error: 'Ogiltigt svarsformat från AI' },
-          { status: 500 }
-        );
+          // Locate the start of the recipes array once
+          if (recipesArrayStart === -1) {
+            const keyIdx = buffer.indexOf('"recipes"');
+            if (keyIdx !== -1) {
+              const arrIdx = buffer.indexOf('[', keyIdx);
+              if (arrIdx !== -1) {
+                recipesArrayStart = arrIdx + 1;
+                searchFrom = recipesArrayStart;
+              }
+            }
+          }
+          if (recipesArrayStart === -1) continue;
+
+          // Extract complete recipe objects as they become available
+          while (extractedCount < recipeCount) {
+            const result = findCompleteObject(buffer, searchFrom);
+            if (!result) break;
+            try {
+              const normalized = normalizeRecipe(JSON.parse(result.json));
+              if (normalized) {
+                controller.enqueue(encoder.encode(JSON.stringify(normalized) + '\n'));
+                extractedCount++;
+              }
+            } catch { /* ignore malformed partial JSON */ }
+            searchFrom = result.end;
+          }
+
+          if (extractedCount >= recipeCount) break;
+        }
+
+        controller.close();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Okänt fel';
+        const lower = message.toLowerCase();
+        const isAuthError =
+          lower.includes('invalid_api_key') ||
+          lower.includes('incorrect api key') ||
+          lower.includes('authenticationerror') ||
+          lower.includes('401');
+        const errMsg = isAuthError
+          ? 'Ogiltig OPENAI_API_KEY. Kontrollera att nyckeln är aktiv och korrekt (platform.openai.com).'
+          : `Kunde inte generera recept: ${message}`;
+        controller.enqueue(encoder.encode(JSON.stringify({ error: errMsg }) + '\n'));
+        controller.close();
       }
+    },
+  });
 
-      // Validate and clean recipes
-      const validRecipes: Recipe[] = recipes
-        .filter((r: any) => r.title && r.ingredients && r.instructions)
-        .map((r: any) => ({
-          title: r.title || 'Namnlöst Recept',
-          description: r.description || '',
-          difficulty: r.difficulty || 'medium',
-          time_minutes: r.time_minutes || 30,
-          servings: r.servings || 4,
-          ingredients: Array.isArray(r.ingredients) 
-            ? r.ingredients.map((i: any) => ({
-                item: typeof i === 'string' ? i : i.item || i.name || '',
-                amount: typeof i === 'string' ? '' : i.amount || i.quantity || '',
-                from_deal: i.from_deal || false
-              }))
-            : [],
-          instructions: Array.isArray(r.instructions) ? r.instructions : [],
-          tips: r.tips || null,
-          search_query: r.search_query || r.title || '',
-        }))
-        .slice(0, 3);
-
-      if (validRecipes.length === 0) {
-        return NextResponse.json(
-          { error: 'Inga giltiga recept genererades' },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({ recipes: validRecipes });
-    } catch (parseError) {
-      console.error('Error parsing OpenAI response:', parseError);
-      console.error('Raw response:', content);
-      return NextResponse.json(
-        { error: 'Kunde inte tolka receptsvaret', details: content.substring(0, 200) },
-        { status: 500 }
-      );
-    }
-  } catch (error) {
-    console.error('Error generating recipes:', error);
-    const message = error instanceof Error ? error.message : 'Okänt fel';
-
-    // Avoid leaking API keys in error details and give a clearer status to the client.
-    const lower = message.toLowerCase();
-    const isInvalidApiKey =
-      lower.includes('invalid_api_key') ||
-      lower.includes('incorrect api key') ||
-      lower.includes('authenticationerror') ||
-      lower.includes('401');
-
-    if (isInvalidApiKey) {
-      return NextResponse.json(
-        {
-          error:
-            'Ogiltig OPENAI_API_KEY. Kontrollera att nyckeln är aktiv och korrekt (platform.openai.com).',
-        },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: 'Kunde inte generera recept', details: message },
-      { status: 500 }
-    );
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-store',
+    },
+  });
 }

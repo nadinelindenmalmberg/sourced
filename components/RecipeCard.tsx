@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import type { MatchedRecipe, GeneratedRecipe } from '@/types';
 import { getDifficultyColor, getDifficultyText } from '@/lib/recipe-utils';
 import { useLanguage } from '@/lib/i18n-context';
-import { Clock, Users, Sparkles } from 'lucide-react';
+import { Clock, Users, Sparkles, ClipboardList, Check as CheckIcon } from 'lucide-react';
 import pantryData from '@/data/pantry.json';
 
 interface NormalizedIngredient {
@@ -82,6 +83,7 @@ function normalizeIngredients(
 
 export default function RecipeCard({ matched, generated, overriddenPantry, onTogglePantry, userHasItems, onToggleUserHas }: RecipeCardProps) {
   const { t } = useLanguage();
+  const [copied, setCopied] = useState(false);
 
   const isAI = !!generated;
   const title = matched?.name ?? generated?.title ?? '';
@@ -99,6 +101,22 @@ export default function RecipeCard({ matched, generated, overriddenPantry, onTog
   const atHomeItems = ingredients.filter((i) => i.atHome);
 
   const linkBtnClass = 'text-xs font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-4 py-2 rounded-full transition-all active:scale-[0.97]';
+
+  const copyShoppingList = () => {
+    const lines: string[] = [];
+    if (onSaleItems.length > 0) {
+      lines.push('🏷️ På kampanj:', ...onSaleItems.map((i) => `  ${i.name}${i.amount ? ' – ' + i.amount : ''}`));
+    }
+    if (toBuyItems.length > 0) {
+      if (lines.length) lines.push('');
+      lines.push('🛒 Köp:', ...toBuyItems.map((i) => `  ${i.name}${i.amount ? ' – ' + i.amount : ''}`));
+    }
+    const text = lines.join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
 
   return (
     <div className="rounded-3xl border border-gray-100 shadow-sm overflow-hidden bg-white">
@@ -222,6 +240,19 @@ export default function RecipeCard({ matched, generated, overriddenPantry, onTog
                 💡 {t('tips')}: <span className="font-normal">{tips}</span>
               </p>
             </div>
+          </>
+        )}
+
+        {(onSaleItems.length > 0 || toBuyItems.length > 0) && (
+          <>
+            <div className="h-px bg-gray-100" />
+            <button
+              onClick={copyShoppingList}
+              className={`flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-full text-xs font-bold transition-all active:scale-[0.97] ${copied ? 'bg-sage-light text-sage-dark border border-sage/30' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700'}`}
+            >
+              {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardList className="w-3.5 h-3.5" />}
+              {copied ? t('copiedShoppingList') : t('copyShoppingList')}
+            </button>
           </>
         )}
 

@@ -50,6 +50,11 @@ export const translations = {
     pantryDesc: 'Avmarkera varor du inte har hemma just nu',
     done: 'Klar',
     aiGenerating: 'AI genererar recept...',
+    dietaryFilter: 'Filtrera',
+    clearFilters: 'Rensa',
+    noRecipesForTags: 'Inga recept matchar de valda filtren.',
+    copyShoppingList: 'Kopiera inköpslista',
+    copiedShoppingList: 'Kopierad!',
   },
   en: {
     appSubtitle: 'Recipes from this week\'s deals',
@@ -100,6 +105,11 @@ export const translations = {
     pantryDesc: 'Uncheck items you are currently out of',
     done: 'Done',
     aiGenerating: 'AI is generating recipes...',
+    dietaryFilter: 'Filter',
+    clearFilters: 'Clear',
+    noRecipesForTags: 'No recipes match the selected filters.',
+    copyShoppingList: 'Copy shopping list',
+    copiedShoppingList: 'Copied!',
   },
 } satisfies Record<Lang, Record<string, string>>;
 

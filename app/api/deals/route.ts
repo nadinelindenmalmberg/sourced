@@ -20,6 +20,10 @@ const NO_CACHE_HEADERS = {
   Pragma: 'no-cache',
 };
 
+const CACHE_TTL_MS = 3600 * 1000; // 1 hour
+const CACHE_HEADERS = { 'Cache-Control': 'public, max-age=3600' };
+const dealsCache = new Map<string, { data: Deal[]; timestamp: number }>();
+
 export type { Deal };
 
 interface HemkopApiResponse {
@@ -59,7 +63,15 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const storeId = searchParams.get('storeId') || '4547';
-    
+
+    const cached = dealsCache.get(storeId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(
+        { deals: cached.data, count: cached.data.length, storeId, source: 'hemkop_api' },
+        { headers: CACHE_HEADERS }
+      );
+    }
+
     const allDeals: Deal[] = [];
     let page = 0;
     let hasMorePages = true;
@@ -176,6 +188,8 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    dealsCache.set(storeId, { data: allDeals, timestamp: Date.now() });
+
     return NextResponse.json(
       {
         deals: allDeals,
@@ -183,7 +197,7 @@ export async function GET(request: NextRequest) {
         storeId,
         source: 'hemkop_api',
       },
-      { headers: NO_CACHE_HEADERS }
+      { headers: CACHE_HEADERS }
     );
   } catch (error) {
     console.error('Error fetching deals:', error);
