@@ -30,6 +30,22 @@ const CATEGORY_LABELS: Record<string, string> = {
   'blommor-och-tillbehor': 'Blommor och tillbehör',
 };
 
+// Keep section order in sync with the filter-bar order in page.tsx.
+const CATEGORY_ORDER = [
+  'kott-fagel-och-chark',
+  'fisk-och-skaldjur',
+  'mejeri-ost-och-agg',
+  'frukt-och-gront',
+  'skafferi',
+  'fardigmat',
+  'brod-och-kakor',
+  'fryst',
+  'dryck',
+  'godis-snacks-och-glass',
+  'vegetariskt',
+  'delikatessen',
+];
+
 function prettyCategoryName(raw: string): string {
   if (CATEGORY_LABELS[raw]) return CATEGORY_LABELS[raw];
   return raw
@@ -42,7 +58,10 @@ export default function DealsGrid({ deals, selectedIngredients, onToggleIngredie
 
   const foodDeals = deals.filter((deal) => {
     const category = deal.category?.toLowerCase() || '';
-    return !NON_FOOD_CATEGORIES.some((nf) => category.includes(nf.toLowerCase()));
+    return !NON_FOOD_CATEGORIES.some((nf) => {
+      const nfLower = nf.toLowerCase();
+      return category === nfLower || category.startsWith(nfLower + '-') || category.includes('-' + nfLower);
+    });
   });
 
   if (loading) {
@@ -69,17 +88,25 @@ export default function DealsGrid({ deals, selectedIngredients, onToggleIngredie
     );
   }
 
-  // Group by top-level category, preserving insertion order
-  const grouped = foodDeals.reduce<{ category: string; deals: Deal[] }[]>((acc, deal) => {
-    const cat = deal.category?.trim() || 'Övrigt';
-    const existing = acc.find((g) => g.category === cat);
-    if (existing) {
-      existing.deals.push(deal);
-    } else {
-      acc.push({ category: cat, deals: [deal] });
-    }
-    return acc;
-  }, []);
+  // Group by top-level category, then sort by the same order as the filter bar.
+  const groupedMap = new Map<string, Deal[]>();
+  for (const deal of foodDeals) {
+    const cat = (deal.category?.trim().toLowerCase() || 'ovrigt');
+    const list = groupedMap.get(cat);
+    if (list) list.push(deal);
+    else groupedMap.set(cat, [deal]);
+  }
+
+  const grouped = Array.from(groupedMap.entries())
+    .map(([category, deals]) => ({ category, deals }))
+    .sort((a, b) => {
+      const ia = CATEGORY_ORDER.indexOf(a.category);
+      const ib = CATEGORY_ORDER.indexOf(b.category);
+      if (ia === -1 && ib === -1) return a.category.localeCompare(b.category);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
 
   const GRID = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3';
 

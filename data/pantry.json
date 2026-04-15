@@ -55,17 +55,7 @@
       "items": [
         "potatis",
         "pasta",
-        "makaroner",
-        "penne",
-        "spaghetti",
-        "tagliatelle",
-        "fettuccine",
-        "rigatoni",
-        "fusilli",
         "ris",
-        "jasminris",
-        "basmati",
-        "basmatiris",
         "nudlar"
       ]
     },
@@ -144,7 +134,6 @@
     "kycklingbuljong", "grönsaksbuljong", "köttbuljong", "fiskbuljong", "fond",
     "mjölk", "ägg", "lök", "vitlök", "gul lök", "citron", "lime",
     "krossade tomater", "kokosmjölk", "majs", "bönor",
-    "potatis", "pasta", "makaroner", "penne", "spaghetti", "tagliatelle",
-    "fettuccine", "rigatoni", "fusilli", "ris", "jasminris", "basmati", "basmatiris", "nudlar"
+    "potatis", "pasta", "ris", "nudlar"
   ]
 }

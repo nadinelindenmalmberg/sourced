@@ -13,15 +13,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Deal } from '@/types';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60 * 60 * 6; // 6 hours
 
 const NO_CACHE_HEADERS = {
   'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
   Pragma: 'no-cache',
 };
 
-const CACHE_TTL_MS = 3600 * 1000; // 1 hour
-const CACHE_HEADERS = { 'Cache-Control': 'public, max-age=3600' };
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
+const CACHE_HEADERS = {
+  'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=300',
+};
 const dealsCache = new Map<string, { data: Deal[]; timestamp: number }>();
 
 export type { Deal };
@@ -63,13 +65,16 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const storeId = searchParams.get('storeId') || '4547';
+    const forceFresh = searchParams.get('refresh') === '1';
 
-    const cached = dealsCache.get(storeId);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(
-        { deals: cached.data, count: cached.data.length, storeId, source: 'hemkop_api' },
-        { headers: CACHE_HEADERS }
-      );
+    if (!forceFresh) {
+      const cached = dealsCache.get(storeId);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return NextResponse.json(
+          { deals: cached.data, count: cached.data.length, storeId, source: 'hemkop_api' },
+          { headers: CACHE_HEADERS }
+        );
+      }
     }
 
     const allDeals: Deal[] = [];
@@ -143,9 +148,26 @@ export async function GET(request: NextRequest) {
             const imageUrl = item.originalImage?.url || item.image?.url || item.thumbnail?.url || '';
             
             // Extract category from googleAnalyticsCategory (format: "category|subcategory|...")
-            const category = item.googleAnalyticsCategory ? 
-              item.googleAnalyticsCategory.split('|')[0] : '';
-            
+            let category = item.googleAnalyticsCategory
+              ? item.googleAnalyticsCategory.split('|')[0]
+              : '';
+
+            // Name-based fallback when the API gives no category
+            if (!category) {
+              const nameLower = (item.name || '').toLowerCase();
+              if (/br[öo]d|levain|baguette|limpa|kn[äa]cke|croissant|bulle|bagel|muffin|kaka|tårta|paj|kex/.test(nameLower)) {
+                category = 'brod-och-kakor';
+              } else if (/mjölk|yoghurt|kvarg|ost|smör|grädde|ägg|fil|crème fraiche/.test(nameLower)) {
+                category = 'mejeri-ost-och-agg';
+              } else if (/kyckl|nöt|fläsk|lamm|köt|korv|chark|bacon|skinka/.test(nameLower)) {
+                category = 'kott-fagel-och-chark';
+              } else if (/lax|torsk|räk|fisk|sill|tonfisk|skaldjur/.test(nameLower)) {
+                category = 'fisk-och-skaldjur';
+              } else if (/äpple|päron|banan|apelsin|tomat|gurka|lök|morot|potatis|grönt|sallad|frukt/.test(nameLower)) {
+                category = 'frukt-och-gront';
+              }
+            }
+
             return {
               id: `${item.name}-${index}-${page}`.replace(/\s+/g, '-').toLowerCase(),
               name: item.name || 'Unknown Product',
@@ -162,8 +184,10 @@ export async function GET(request: NextRequest) {
         
         allDeals.push(...pageDeals);
 
-        // If we got fewer than the page size, we're probably at the end
-        if (pageDeals.length < 30) {
+        // Determine end-of-pagination from the raw page size, not mapped count.
+        // Some items may be filtered out (e.g. missing name), and that should not
+        // make us stop early and miss later pages/categories.
+        if (results.length < 30) {
           hasMorePages = false;
         } else {
           page++;
@@ -187,7 +211,7 @@ export async function GET(request: NextRequest) {
         break;
       }
     }
-    
+
     dealsCache.set(storeId, { data: allDeals, timestamp: Date.now() });
 
     return NextResponse.json(

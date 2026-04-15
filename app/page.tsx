@@ -50,6 +50,10 @@ export default function Home() {
   const [showPantryTooltip, setShowPantryTooltip] = useState(true);
   const [overriddenPantry, setOverriddenPantry] = useState<string[]>([]);
   const [userHasItems, setUserHasItems] = useState<string[]>([]);
+  const [customPantryItems, setCustomPantryItems] = useState<string[]>([]);
+  const [pantrySearch, setPantrySearch] = useState('');
+  const [newPantryItem, setNewPantryItem] = useState('');
+  const [pantryLoaded, setPantryLoaded] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [storeName, setStoreName] = useState<string>('');
@@ -68,6 +72,26 @@ export default function Home() {
     const t = setTimeout(() => setShowPantryTooltip(false), 4000);
     return () => clearTimeout(t);
   }, []);
+
+  // Hydrate pantry state from localStorage (client-only, runs once)
+  useEffect(() => {
+    const savedOverrides = localStorage.getItem('pantry-overrides');
+    const savedCustom = localStorage.getItem('pantry-custom-items');
+    if (savedOverrides) setOverriddenPantry(JSON.parse(savedOverrides));
+    if (savedCustom) setCustomPantryItems(JSON.parse(savedCustom));
+    setPantryLoaded(true);
+  }, []);
+
+  // Persist pantry state to localStorage (skip until hydration is done)
+  useEffect(() => {
+    if (!pantryLoaded) return;
+    localStorage.setItem('pantry-overrides', JSON.stringify(overriddenPantry));
+  }, [overriddenPantry, pantryLoaded]);
+
+  useEffect(() => {
+    if (!pantryLoaded) return;
+    localStorage.setItem('pantry-custom-items', JSON.stringify(customPantryItems));
+  }, [customPantryItems, pantryLoaded]);
 
   // Resolve store ID → name + address
   useEffect(() => {
@@ -127,7 +151,17 @@ export default function Home() {
   const error = dealsError ?? suggestionsError;
   const currentItem = allRecipes[currentRecipeIndex];
 
-  const allPantryItems = pantryData.display_items;
+  const CATEGORY_DISPLAY: Record<string, { emoji: string; label: string }> = {
+    kryddor: { emoji: '🧂', label: 'Kryddor & smaksättare' },
+    matfett: { emoji: '🫒', label: 'Matfett & oljor' },
+    bas_torrvaror: { emoji: '🌾', label: 'Torrvaror' },
+    kolhydrater: { emoji: '🍝', label: 'Kolhydrater' },
+    saser_smaksattare: { emoji: '🫙', label: 'Såser & smaksättare' },
+    buljong: { emoji: '🍲', label: 'Buljong & fond' },
+    mejeri_bas: { emoji: '🥚', label: 'Mejeri' },
+    grönsaker_bas: { emoji: '🧅', label: 'Grönsaker' },
+    konserver: { emoji: '🥫', label: 'Konserver' },
+  };
 
   const CATEGORY_LABELS: Record<string, string> = {
     'kott-fagel-och-chark': 'Kött & fågel',
@@ -143,11 +177,53 @@ export default function Home() {
     'delikatessen': 'Delikatessen',
     'godis-snacks-och-glass': 'Godis & snacks',
   };
-  const NON_FOOD_CATS = ['hem-och-hushall', 'blommor-och-tillbehor', 'hushall', 'hygien', 'djur', 'halsa'];
+  const NON_FOOD_CATS = new Set(['hem-och-hushall', 'blommor-och-tillbehor', 'hushall', 'hygien', 'djur', 'halsa-och-skonhet', 'barn']);
+  const CATEGORY_ORDER = [
+    'kott-fagel-och-chark',
+    'fisk-och-skaldjur',
+    'mejeri-ost-och-agg',
+    'frukt-och-gront',
+    'skafferi',
+    'fardigmat',
+    'vegetariskt',
+    'brod-och-kakor',
+    'fryst',
+    'dryck',
+    'godis-snacks-och-glass',
+    'delikatessen',
+  ];
+
+  const normalizedDeals = deals.map((d) => ({
+    ...d,
+    category: (d.category || '').trim().toLowerCase(),
+  }));
+
   const availableCategories = Array.from(
-    new Set(deals.map((d) => d.category).filter((c): c is string => !!c && !NON_FOOD_CATS.some((nf) => c.includes(nf))))
-  );
-  const filteredDeals = activeCategory === 'all' ? deals : deals.filter((d) => d.category === activeCategory);
+    new Set(
+      normalizedDeals
+        .map((d) => d.category)
+        .filter(
+          (c): c is string => !!c && !NON_FOOD_CATS.has(c)
+        )
+    )
+  ).sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a);
+    const ib = CATEGORY_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  useEffect(() => {
+    if (activeCategory !== 'all' && !availableCategories.includes(activeCategory)) {
+      setActiveCategory('all');
+    }
+  }, [activeCategory, availableCategories]);
+
+  const filteredDeals = activeCategory === 'all'
+    ? normalizedDeals
+    : normalizedDeals.filter((d) => d.category === activeCategory);
 
   return (
     <main className="min-h-screen pb-28 bg-gray-50">
@@ -359,45 +435,148 @@ export default function Home() {
       {/* Pantry modal */}
       {showPantry && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[80vh] flex flex-col animate-fade-in-up">
-            <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0 flex items-start justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">{t('pantryTitle')}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{t('pantryDesc')}</p>
-              </div>
-              <button
-                onClick={() => setShowPantry(false)}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all active:scale-95 flex-shrink-0 ml-3 mt-0.5"
-              >
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 px-4 py-3">
-              <div className="grid grid-cols-2 gap-2">
-                {allPantryItems.map((item) => {
-                  const isOut = overriddenPantry.includes(item);
-                  return (
+          <div className="w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col animate-fade-in-up">
+
+            {/* Header */}
+            <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">{t('pantryTitle')}</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{t('pantryDesc')}</p>
+                </div>
+                <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                  {overriddenPantry.length > 0 && (
                     <button
-                      key={item}
-                      onClick={() => togglePantryOverride(item)}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-all text-sm ${
-                        isOut
-                          ? 'border-gray-100 text-gray-300 bg-white'
-                          : 'border-sage/40 bg-sage-light text-gray-700 font-medium'
-                      }`}
+                      onClick={() => setOverriddenPantry([])}
+                      className="text-xs text-gray-400 hover:text-red-400 transition-colors"
                     >
-                      <span className={`w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center border ${isOut ? 'border-gray-200' : 'border-sage bg-sage'}`}>
-                        {!isOut && <Check className="w-2.5 h-2.5 text-white" />}
-                      </span>
-                      {item}
+                      {t('pantryResetAll')}
                     </button>
-                  );
-                })}
+                  )}
+                  <button
+                    onClick={() => { setShowPantry(false); setPantrySearch(''); setNewPantryItem(''); }}
+                    className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all active:scale-95"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={pantrySearch}
+                  onChange={(e) => setPantrySearch(e.target.value)}
+                  placeholder={t('pantrySearch')}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-gray-200"
+                />
+                {pantrySearch && (
+                  <button onClick={() => setPantrySearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-4 py-4 space-y-5">
+
+              {/* Category sections */}
+              {Object.entries(pantryData.categories).map(([key, cat]) => {
+                const filtered = pantrySearch
+                  ? cat.items.filter((item) => item.toLowerCase().includes(pantrySearch.toLowerCase()))
+                  : cat.items;
+                if (filtered.length === 0) return null;
+                const meta = CATEGORY_DISPLAY[key] ?? { emoji: '📦', label: cat.name };
+                return (
+                  <div key={key}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-sm">{meta.emoji}</span>
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{meta.label}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {filtered.map((item) => {
+                        const isOut = overriddenPantry.includes(item);
+                        return (
+                          <button
+                            key={item}
+                            onClick={() => togglePantryOverride(item)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all active:scale-95 ${
+                              isOut
+                                ? 'bg-white border-gray-100 text-gray-300 line-through'
+                                : 'bg-sage-light border-sage/30 text-gray-700 hover:border-sage/60'
+                            }`}
+                          >
+                            {item}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Custom items */}
+              {(!pantrySearch || customPantryItems.some((i) => i.toLowerCase().includes(pantrySearch.toLowerCase()))) && (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-sm">✨</span>
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">{t('pantryCustomSection')}</span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {customPantryItems
+                      .filter((i) => !pantrySearch || i.toLowerCase().includes(pantrySearch.toLowerCase()))
+                      .map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => setCustomPantryItems((prev) => prev.filter((i) => i !== item))}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-coral-light border border-coral/20 text-coral hover:bg-red-50 hover:border-red-200 hover:text-red-400 transition-all group active:scale-95"
+                        >
+                          {item}
+                          <X className="w-3 h-3 opacity-40 group-hover:opacity-100" />
+                        </button>
+                      ))}
+                  </div>
+
+                  {!pantrySearch && (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newPantryItem}
+                        onChange={(e) => setNewPantryItem(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = newPantryItem.trim().toLowerCase();
+                            if (val && !customPantryItems.includes(val)) setCustomPantryItems((prev) => [...prev, val]);
+                            setNewPantryItem('');
+                          }
+                        }}
+                        placeholder={t('pantryAddPlaceholder')}
+                        className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                      />
+                      <button
+                        onClick={() => {
+                          const val = newPantryItem.trim().toLowerCase();
+                          if (val && !customPantryItems.includes(val)) setCustomPantryItems((prev) => [...prev, val]);
+                          setNewPantryItem('');
+                        }}
+                        disabled={!newPantryItem.trim()}
+                        className="px-4 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl disabled:opacity-40 hover:bg-gray-800 transition-colors"
+                      >
+                        {t('pantryAddItem')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
             <div className="px-4 pb-5 pt-3 border-t border-gray-100 flex-shrink-0">
               <button
-                onClick={() => setShowPantry(false)}
+                onClick={() => { setShowPantry(false); setPantrySearch(''); setNewPantryItem(''); }}
                 className="w-full bg-gray-900 text-white rounded-full py-3 text-sm font-bold hover:bg-gray-800 transition-all active:scale-[0.98] shadow-sm"
               >
                 {t('done')}
@@ -499,7 +678,7 @@ export default function Home() {
                 generated={currentItem.type === 'generated' ? currentItem.recipe : undefined}
                 overriddenPantry={overriddenPantry}
                 onTogglePantry={togglePantryOverride}
-                userHasItems={userHasItems}
+                userHasItems={Array.from(new Set([...userHasItems, ...customPantryItems]))}
                 onToggleUserHas={(name) => setUserHasItems((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name])}
               />
             )}
