@@ -16,6 +16,7 @@ import {
   Check,
   Warehouse,
   MapPin,
+  Search,
 } from 'lucide-react';
 
 function buildAllRecipes(
@@ -58,8 +59,10 @@ export default function Home() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [storeName, setStoreName] = useState<string>('');
   const [storeAddress, setStoreAddress] = useState<string>('');
-  const [storeInputValue, setStoreInputValue] = useState('');
   const [storeError, setStoreError] = useState('');
+  const [storeSearchQuery, setStoreSearchQuery] = useState('');
+  const [storeSearchResults, setStoreSearchResults] = useState<{ storeId: string; name: string; address: string; town: string }[]>([]);
+  const [storeSearchLoading, setStoreSearchLoading] = useState(false);
   const recipeContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,6 +103,25 @@ export default function Home() {
       .then((d) => { if (d.name) { setStoreName(d.name.replace('Hemköp ', '')); setStoreAddress(d.address); } })
       .catch(() => {});
   }, [storeId]);
+
+  // Pre-warm store cache when modal opens
+  useEffect(() => {
+    if (storeExpanded) fetch('/api/stores?q=a').catch(() => {});
+  }, [storeExpanded]);
+
+  // Debounced store search
+  useEffect(() => {
+    if (storeSearchQuery.length < 2) { setStoreSearchResults([]); return; }
+    const timer = setTimeout(() => {
+      setStoreSearchLoading(true);
+      fetch(`/api/stores?q=${encodeURIComponent(storeSearchQuery)}`)
+        .then((r) => r.json())
+        .then((d) => setStoreSearchResults(d.stores ?? []))
+        .catch(() => setStoreSearchResults([]))
+        .finally(() => setStoreSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [storeSearchQuery]);
 
   const toggleIngredient = (name: string) => {
     setSelectedIngredients((prev) =>
@@ -237,9 +259,9 @@ export default function Home() {
             {/* Pantry */}
             <div className="relative">
               {showPantryTooltip && (
-                <div className="absolute top-full mt-2 right-0 bg-gray-900 text-white text-[11px] font-medium px-3 py-1.5 rounded-xl whitespace-nowrap z-10 shadow-lg">
+                <div className="fixed top-[60px] right-3 bg-gray-900 text-white text-[11px] font-medium px-3 py-1.5 rounded-xl whitespace-nowrap z-[200] shadow-lg pointer-events-none">
                   {t('pantryTooltip')}
-                  <div className="absolute -top-1 right-4 w-2 h-2 bg-gray-900 rotate-45" />
+                  <div className="absolute -top-1 right-7 w-2 h-2 bg-gray-900 rotate-45" />
                 </div>
               )}
               <button
@@ -252,7 +274,7 @@ export default function Home() {
 
             {/* Store chip */}
             <button
-              onClick={() => { setStoreExpanded((v) => !v); setStoreInputValue(''); setStoreError(''); }}
+              onClick={() => { setStoreExpanded((v) => !v); setStoreSearchQuery(''); setStoreSearchResults([]); setStoreError(''); }}
               className={`flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold transition-colors max-w-[160px] ${storeExpanded ? 'bg-gray-900 text-white' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
             >
               <MapPin className="w-3 h-3 flex-shrink-0" />
@@ -337,58 +359,76 @@ export default function Home() {
 
       {/* Store switcher modal */}
       {storeExpanded && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) { setStoreExpanded(false); setStoreSearchQuery(''); setStoreSearchResults([]); } }}
+        >
           <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl">
             <div className="px-6 pt-6 pb-4 flex items-start justify-between border-b border-gray-100">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Byt butik</h3>
-                {storeName && <p className="text-sm text-gray-500 mt-0.5">{storeName}</p>}
+                {storeName && <p className="text-sm text-gray-500 mt-0.5">Nu: {storeName}</p>}
               </div>
-              <button onClick={() => setStoreExpanded(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+              <button
+                onClick={() => { setStoreExpanded(false); setStoreSearchQuery(''); setStoreSearchResults([]); }}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+              >
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-3">
-              <p className="text-sm text-gray-500">Ange butikens ID-nummer från Hemköps webbplats.</p>
-              <div className="flex gap-2">
+            <div className="px-6 pt-5 pb-6">
+              {/* Search input */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
-                  value={storeInputValue}
-                  onChange={(e) => { setStoreInputValue(e.target.value); setStoreError(''); }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && storeInputValue.trim()) {
-                      const id = storeInputValue.trim();
-                      fetch(`/api/store?storeId=${id}`)
-                        .then(r => r.json())
-                        .then(d => {
-                          if (d.name) { setStoreId(id); fetchDeals(); setStoreExpanded(false); }
-                          else setStoreError('Butiken hittades inte');
-                        })
-                        .catch(() => setStoreError('Kunde inte kontakta API'));
-                    }
-                  }}
-                  className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
-                  placeholder="t.ex. 4547"
+                  value={storeSearchQuery}
+                  onChange={(e) => { setStoreSearchQuery(e.target.value); setStoreError(''); }}
+                  className="w-full text-sm bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+                  placeholder="Sök stad eller butik…"
                   autoFocus
                 />
-                <button
-                  onClick={() => {
-                    const id = storeInputValue.trim();
-                    if (!id) return;
-                    fetch(`/api/store?storeId=${id}`)
-                      .then(r => r.json())
-                      .then(d => {
-                        if (d.name) { setStoreId(id); fetchDeals(); setStoreExpanded(false); }
-                        else setStoreError('Butiken hittades inte');
-                      })
-                      .catch(() => setStoreError('Kunde inte kontakta API'));
-                  }}
-                  disabled={!storeInputValue.trim() || loadingDeals}
-                  className="h-10 px-4 bg-gray-900 text-white text-sm font-semibold rounded-xl disabled:opacity-40 hover:bg-gray-800 transition-colors"
-                >
-                  Byt
-                </button>
+                {storeSearchLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                )}
               </div>
-              {storeError && <p className="text-xs text-red-500">{storeError}</p>}
+
+              {/* Fixed-height results area — never resizes the modal */}
+              <div className="mt-3 h-56 overflow-y-auto rounded-xl border border-gray-200">
+                {storeSearchResults.length > 0 ? (
+                  <ul className="divide-y divide-gray-100">
+                    {storeSearchResults.map((s) => (
+                      <li key={s.storeId}>
+                        <button
+                          className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-start gap-3"
+                          onClick={() => {
+                            setStoreId(s.storeId);
+                            fetchDeals();
+                            setStoreExpanded(false);
+                            setStoreSearchQuery('');
+                            setStoreSearchResults([]);
+                          }}
+                        >
+                          <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{s.name}</p>
+                            {(s.address || s.town) && (
+                              <p className="text-xs text-gray-500">{[s.address, s.town].filter(Boolean).join(', ')}</p>
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-sm text-gray-400">
+                      {storeSearchQuery.length < 2 ? 'Skriv för att söka…' : storeSearchLoading ? '' : 'Inga butiker hittades'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {storeError && <p className="text-xs text-red-500 mt-2">{storeError}</p>}
             </div>
           </div>
         </div>

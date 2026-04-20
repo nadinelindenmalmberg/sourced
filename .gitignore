@@ -18,11 +18,23 @@
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# IDE / editor (local)
+.idea/
+*.swp
+*.swo
+
+# AI assistant local notes (keep machine-specific guidance out of git)
+CLAUDE.md
+claude.md
 
 # RAG index (run npm run ingest to generate)
 /data/recipe-embeddings.json
@@ -37,3 +49,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tooling caches
+.turbo

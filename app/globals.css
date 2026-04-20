@@ -50,18 +50,16 @@
 }
 
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: url('/bg.png') repeat;
   background-size: 500px;
-  background-attachment: fixed;
 }
 
 @media (max-width: 640px) {
   button, a, input, select {
     min-height: 44px;
-    min-width: 44px;
   }
 }
 
